@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import AuthProvider from '@/components/AuthProvider'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 export const metadata: Metadata = {
-  title: 'FinanceAI - Your Personal Loan Assistant',
-  description: 'Get instant personal loans with AI-powered assistance. Quick approvals, competitive rates, and seamless experience.',
+  title: 'LaunchPad - Business Launch Copilot for MSMEs',
+  description: 'Your AI-powered guide to starting, legalizing, and growing your business. Get compliance guidance, platform onboarding help, and registration support all in one place.',
 }
 
 export default function RootLayout({
@@ -13,9 +14,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className="antialiased">
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body className="antialiased bg-white dark:bg-gray-900 transition-colors duration-300">
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
