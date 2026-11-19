@@ -16,9 +16,14 @@ class Settings(BaseSettings):
     # Database - SQLite by default for zero-friction local run
     DATABASE_URL: str = "sqlite:///./nbfc_loan.db"
     
-    # Groq LLM Configuration
+    # Google Gemini Configuration (Primary Provider)
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_VISION_MODEL: str = "gemini-1.5-flash"
+
+    # Groq LLM Configuration (Alternative Provider)
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GROQ_VISION_MODEL: str = "llama-3.2-11b-vision-preview"
     
     # CORS

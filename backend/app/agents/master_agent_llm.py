@@ -107,10 +107,11 @@ GUIDELINES (EY Top-Tier Executive Standards):
             resp = await llm.ainvoke(messages)
             bot_text = str(resp.content).strip()
         except Exception as e:
-            if amount:
-                bot_text = f"Got it, {customer_name}! Looking at Rs. {amount:,.0f} for your {purpose or 'plans'}. Let me calculate the best EMI options for you right away."
-            else:
-                bot_text = f"Hi {customer_name}! I would love to help you with that. How much funding are you looking for today?"
+            import logging
+            logging.getLogger(__name__).warning(f"[MasterAgent] LLM call failed, using consultative fallback: {e}")
+            bot_text = self._intelligent_fallback_response(
+                user_message, customer_name, amount, purpose, pre_approved
+            )
 
         updates["bot_response"] = bot_text
 
@@ -125,6 +126,77 @@ GUIDELINES (EY Top-Tier Executive Standards):
         # Update multi-turn dialog memory
         self._record_conversation(state, user_message, bot_text)
         return updates
+
+    def _intelligent_fallback_response(
+        self, user_msg: str, name: str, amount: Optional[float], purpose: Optional[str], pre_approved: float
+    ) -> str:
+        """Consultative financial discovery response when LLM is unavailable or loading"""
+        msg = user_msg.lower().strip()
+
+        # 1. Interest rates query
+        if any(w in msg for w in ["rate", "interest", "roi", "charge", "fee", "cost", "percentage"]):
+            rate_info = "starting at **10.50% p.a.** (reducing balance)"
+            if pre_approved > 0:
+                return (
+                    f"Hi {name}! Our personal loan interest rates are {rate_info} with zero processing fees. "
+                    f"Based on your profile, you are already pre-approved for up to **Rs. {pre_approved:,.0f}**. "
+                    f"How much funding do you have in mind today?"
+                )
+            return (
+                f"Hi {name}! Our personal loan interest rates start from **10.50% to 14.0% p.a.** (reducing balance), "
+                f"with zero processing fees for qualified applicants and flexible 12 to 60-month tenures. "
+                f"How much loan amount would you like to explore?"
+            )
+
+        # 2. Eligibility query
+        if any(w in msg for w in ["eligib", "criteria", "qualif", "check", "am i eligible"]):
+            if pre_approved > 0:
+                return (
+                    f"Great news, {name}! You are already pre-qualified with an instant limit of **Rs. {pre_approved:,.0f}**! "
+                    f"No extra verification is needed within this limit. "
+                    f"Would you like to apply for the full Rs. {pre_approved:,.0f} or a different amount?"
+                )
+            return (
+                f"Hi {name}! Eligibility requires being an Indian resident aged 21-65 with a minimum CIBIL score of 700 and stable income. "
+                f"Could you share how much funding you are looking for so I can assess your terms?"
+            )
+
+        # 3. Tenure query
+        if any(w in msg for w in ["tenure", "term", "month", "year", "duration", "time", "period"]):
+            return (
+                f"Hi {name}! We offer flexible repayment tenures from **12 to 60 months** (1 to 5 years). "
+                f"You also enjoy zero prepayment penalty after 6 completed EMIs! "
+                f"What loan amount and tenure would you prefer?"
+            )
+
+        # 4. Document query
+        if any(w in msg for w in ["doc", "paper", "aadhaar", "pan", "salary", "slip", "proof"]):
+            if pre_approved > 0:
+                return (
+                    f"Hi {name}! Because you have a pre-approved offer of **Rs. {pre_approved:,.0f}**, "
+                    f"you require **zero physical paperwork**! For amounts above your limit, only a recent salary slip is required. "
+                    f"How much would you like to borrow?"
+                )
+            return (
+                f"Hi {name}! Our process is 100% digital. All you need is your PAN and Aadhaar, "
+                f"and a salary slip if requesting an enhanced amount. What loan amount are you considering?"
+            )
+
+        # 5. Amount given
+        if amount:
+            purp_str = f" for your {purpose}" if purpose else ""
+            return f"Got it, {name}! Looking at Rs. {amount:,.0f}{purp_str}. Let me calculate your customized EMI options right away."
+
+        # 6. Greetings or general discovery
+        if pre_approved > 0:
+            return (
+                f"Hi {name}! Welcome to NBFC Finance. As a valued customer, you have a pre-approved limit of up to "
+                f"**Rs. {pre_approved:,.0f}** available for immediate disbursal. What loan amount would you like to explore today?"
+            )
+        return (
+            f"Hi {name}! Welcome to NBFC Finance. I'm Shruti, your loan advisor. We offer instant unsecured personal loans "
+            f"from Rs. 50,000 to Rs. 15,00,000 at competitive rates. How much funding are you looking for?"
+        )
 
     def _record_conversation(self, state: LoanApplicationState, user_msg: str, bot_msg: str):
         """Append turn to conversation context"""

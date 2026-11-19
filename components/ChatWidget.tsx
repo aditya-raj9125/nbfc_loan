@@ -107,6 +107,7 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const websocketRef = useRef<WebSocket | null>(null);
+  const prevCustomerIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const scrollToBottom = () => {
@@ -137,21 +138,31 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
     }
   }, [initialMessage, isExpanded]);
 
+  const customerEmail = status === 'authenticated' && session?.user?.email
+    ? session.user.email
+    : 'guest';
+
   // Connect to backend WebSocket for real agent responses
   useEffect(() => {
     // Skip connecting if auth status is still loading
     if (status === 'loading') return;
 
-    // Prevent double-connect in React StrictMode (dev) by checking ref
-    if (websocketRef.current && websocketRef.current.readyState < WebSocket.CLOSING) {
+    const currentCustomerId = customerEmail === 'guest'
+      ? 'guest'
+      : encodeURIComponent(customerEmail);
+
+    setCustomerId(currentCustomerId);
+
+    // Prevent duplicate connect if already open for this same user
+    if (
+      websocketRef.current &&
+      (websocketRef.current.readyState === WebSocket.OPEN || websocketRef.current.readyState === WebSocket.CONNECTING) &&
+      prevCustomerIdRef.current === currentCustomerId
+    ) {
       return;
     }
 
-    const currentCustomerId = status === 'authenticated' && session?.user?.email
-      ? encodeURIComponent(session.user.email)
-      : 'guest';
-
-    setCustomerId(currentCustomerId);
+    prevCustomerIdRef.current = currentCustomerId;
 
     const wsUrl = `ws://localhost:8000/ws/chat/${currentCustomerId}`;
     let ws: WebSocket;
@@ -173,15 +184,23 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'bot_message') {
-            const newMessage: Message = {
-              id: Date.now().toString(),
-              text: data.content,
-              sender: 'bot',
-              timestamp: new Date(),
-              agentType: data.agent as any
-            };
-            setMessages(prev => [...prev, newMessage]);
+            const incomingText = data.content || data.message || '';
             const incomingAgent = (data.agent as string) || 'master';
+
+            setMessages(prev => {
+              // Avoid duplicate greeting on reconnect
+              if (data.metadata?.stage === 'greeting' && prev.some(m => m.text === incomingText)) {
+                return prev;
+              }
+              return [...prev, {
+                id: Date.now().toString(),
+                text: incomingText,
+                sender: 'bot',
+                timestamp: new Date(),
+                agentType: incomingAgent as any
+              }];
+            });
+
             const safeAgent: keyof typeof agentInfo =
               (incomingAgent in agentInfo ? incomingAgent : 'master') as keyof typeof agentInfo;
             setCurrentAgent(safeAgent);
@@ -205,13 +224,13 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
     return () => {
       isCancelled = true;
       clearTimeout(timer);
-      if (ws && ws.readyState < WebSocket.CLOSING) {
+      if (ws && ws.readyState < WebSocket.CLOSING && prevCustomerIdRef.current !== currentCustomerId) {
         ws.close();
+        websocketRef.current = null;
+        setIsConnected(false);
       }
-      websocketRef.current = null;
-      setIsConnected(false);
     };
-  }, [session, status]);
+  }, [customerEmail, status]);
 
   const simulateBotResponse = (userMessage: string) => {
     setIsTyping(true);

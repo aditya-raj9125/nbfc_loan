@@ -1,56 +1,108 @@
 """
-LLM Factory - Provides Groq LLMs for all agents
-Conversational (temp 0.7) for master/sales, analytical (temp 0.3) for verification/underwriting/sanction,
-and vision (temp 0.1) for document OCR (Aadhaar, PAN, Salary Slip).
+LLM Factory - Multimodal AI Provider (Google Gemini & Groq)
+Primary: Google Gemini (Gemini 1.5 Flash / Pro) with native Multimodal Vision
+Secondary: Groq Cloud API
 """
 import logging
-from langchain_groq import ChatGroq
+import os
+from typing import Any
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
 
-def get_conversational_llm() -> ChatGroq:
-    """High-temperature LLM for natural, empathetic conversation (master, sales, document agents)."""
+def _get_gemini_api_key(settings) -> str:
+    """Retrieve Gemini API key from settings or environment variables"""
+    return (
+        getattr(settings, "GEMINI_API_KEY", "")
+        or os.environ.get("GEMINI_API_KEY", "")
+        or os.environ.get("GOOGLE_API_KEY", "")
+    ).strip()
+
+
+def get_conversational_llm() -> Any:
+    """High-temperature LLM for natural, empathetic conversation (master, sales)."""
     settings = get_settings()
+    gemini_key = _get_gemini_api_key(settings)
+
+    if gemini_key:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            logger.info(f"[LLMFactory] Using Google Gemini ({model_name}) for Conversational LLM")
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=gemini_key,
+                temperature=0.7,
+                max_output_tokens=1024,
+            )
+        except Exception as e:
+            logger.warning(f"[LLMFactory] Failed to initialize Gemini, checking Groq: {e}")
+
+    # Fallback to Groq
+    from langchain_groq import ChatGroq
+    model_name = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
+    logger.info(f"[LLMFactory] Using Groq ({model_name}) for Conversational LLM")
     return ChatGroq(
         api_key=settings.GROQ_API_KEY,
-        model=settings.GROQ_MODEL,
+        model=model_name,
         temperature=0.7,
         max_tokens=1024,
     )
 
 
-def get_analytical_llm() -> ChatGroq:
+def get_analytical_llm() -> Any:
     """Low-temperature LLM for structured decisions (verification, underwriting, sanction)."""
     settings = get_settings()
+    gemini_key = _get_gemini_api_key(settings)
+
+    if gemini_key:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=gemini_key,
+                temperature=0.2,
+                max_output_tokens=1024,
+            )
+        except Exception as e:
+            logger.warning(f"[LLMFactory] Failed to initialize Gemini for analytical: {e}")
+
+    from langchain_groq import ChatGroq
+    model_name = getattr(settings, "GROQ_MODEL", "llama-3.3-70b-versatile")
     return ChatGroq(
         api_key=settings.GROQ_API_KEY,
-        model=settings.GROQ_MODEL,
+        model=model_name,
         temperature=0.2,
         max_tokens=1024,
     )
 
 
-def get_vision_llm() -> ChatGroq:
-    """Vision-capable LLM for document OCR — reads images and PDFs directly."""
+def get_vision_llm() -> Any:
+    """Vision-capable LLM for document OCR — natively reads images and PDFs directly."""
     settings = get_settings()
+    gemini_key = _get_gemini_api_key(settings)
+
+    if gemini_key:
+        try:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            model_name = getattr(settings, "GEMINI_VISION_MODEL", "gemini-1.5-flash")
+            logger.info(f"[LLMFactory] Using Google Gemini Multimodal Vision ({model_name})")
+            return ChatGoogleGenerativeAI(
+                model=model_name,
+                google_api_key=gemini_key,
+                temperature=0.1,
+                max_output_tokens=1024,
+            )
+        except Exception as e:
+            logger.warning(f"[LLMFactory] Failed to initialize Gemini Vision: {e}")
+
+    from langchain_groq import ChatGroq
+    model_name = getattr(settings, "GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
     return ChatGroq(
         api_key=settings.GROQ_API_KEY,
-        model=settings.GROQ_VISION_MODEL,
+        model=model_name,
         temperature=0.1,
         max_tokens=1024,
     )
-
-
-# Module-level instances with fallback
-try:
-    conversational_llm = get_conversational_llm()
-    analytical_llm = get_analytical_llm()
-    vision_llm = get_vision_llm()
-    logger.info("LLM instances initialized successfully.")
-except Exception as e:
-    logger.warning("LLM initialization warning: %s", e)
-    conversational_llm = None
-    analytical_llm = None
-    vision_llm = None
