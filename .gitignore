@@ -73,3 +73,6 @@ coverage/
 *.pdf
 image.png
 next-env.d.ts
+*.db
+*.sqlite
+*.sqlite3

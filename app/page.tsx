@@ -110,7 +110,7 @@ export default function Home() {
               <div className="max-w-7xl mx-auto flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-full"></div>
-                  <span className="text-xl font-semibold text-gray-900">FinanceAI</span>
+                  <span className="text-xl font-semibold text-gray-900">NBFC Finance</span>
                 </div>
                 <div className="hidden md:flex items-center gap-8">
                   <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors text-sm">Products</a>
@@ -825,7 +825,7 @@ export default function Home() {
                   <div className="md:col-span-1">
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-full"></div>
-                      <span className="text-lg font-semibold text-gray-900">FinanceAI</span>
+                      <span className="text-lg font-semibold text-gray-900">NBFC Finance</span>
                     </div>
                   </div>
 
@@ -893,7 +893,7 @@ export default function Home() {
 
                 {/* Bottom */}
                 <div className="border-t border-gray-100 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-                  <p className="text-gray-400 text-sm">© 2025 FinanceAI. All rights reserved</p>
+                  <p className="text-gray-400 text-sm">© 2025 NBFC Finance Limited. All rights reserved</p>
                   <div className="flex items-center gap-6 text-gray-400 text-sm">
                     <a href="#" className="hover:text-gray-600 transition-colors">Privacy Policy</a>
                     <a href="#" className="hover:text-gray-600 transition-colors">Terms</a>

@@ -139,59 +139,75 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
 
   // Connect to backend WebSocket for real agent responses
   useEffect(() => {
-    // Connect for both authenticated users and guests
-    // For guests, use "guest" as the customer ID
-    // For authenticated users, use their email
+    // Skip connecting if auth status is still loading
+    if (status === 'loading') return;
+
+    // Prevent double-connect in React StrictMode (dev) by checking ref
+    if (websocketRef.current && websocketRef.current.readyState < WebSocket.CLOSING) {
+      return;
+    }
+
     const currentCustomerId = status === 'authenticated' && session?.user?.email
       ? encodeURIComponent(session.user.email)
       : 'guest';
-    
+
     setCustomerId(currentCustomerId);
-    
+
     const wsUrl = `ws://localhost:8000/ws/chat/${currentCustomerId}`;
-    const ws = new WebSocket(wsUrl);
-    websocketRef.current = ws;
+    let ws: WebSocket;
+    let isCancelled = false;
 
-    ws.onopen = () => {
-      console.log('Chat WebSocket connected');
-      setIsConnected(true);
-    };
+    // Small delay to avoid StrictMode double-invoke race
+    const timer = setTimeout(() => {
+      if (isCancelled) return;
+      ws = new WebSocket(wsUrl);
+      websocketRef.current = ws;
 
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'bot_message') {
-          const newMessage: Message = {
-            id: Date.now().toString(),
-            text: data.content,
-            sender: 'bot',
-            timestamp: new Date(),
-            agentType: data.agent as any
-          };
-          setMessages(prev => [...prev, newMessage]);
-          const incomingAgent = (data.agent as string) || 'master';
-          const safeAgent: keyof typeof agentInfo =
-            (incomingAgent in agentInfo ? incomingAgent : 'master') as keyof typeof agentInfo;
-          setCurrentAgent(safeAgent);
-          setIsTyping(false);
+      ws.onopen = () => {
+        if (isCancelled) { ws.close(); return; }
+        console.log('Chat WebSocket connected');
+        setIsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'bot_message') {
+            const newMessage: Message = {
+              id: Date.now().toString(),
+              text: data.content,
+              sender: 'bot',
+              timestamp: new Date(),
+              agentType: data.agent as any
+            };
+            setMessages(prev => [...prev, newMessage]);
+            const incomingAgent = (data.agent as string) || 'master';
+            const safeAgent: keyof typeof agentInfo =
+              (incomingAgent in agentInfo ? incomingAgent : 'master') as keyof typeof agentInfo;
+            setCurrentAgent(safeAgent);
+            setIsTyping(false);
+          }
+        } catch (e) {
+          console.error('Failed to parse WS message', e);
         }
-      } catch (e) {
-        console.error('Failed to parse WS message', e);
-      }
-    };
+      };
 
-    ws.onerror = (event) => {
-      console.error('Chat WebSocket error', event);
-      setIsConnected(false);
-    };
+      ws.onerror = () => {
+        setIsConnected(false);
+      };
 
-    ws.onclose = () => {
-      console.log('Chat WebSocket closed');
-      setIsConnected(false);
-    };
+      ws.onclose = () => {
+        console.log('Chat WebSocket closed');
+        setIsConnected(false);
+      };
+    }, 100);
 
     return () => {
-      ws.close();
+      isCancelled = true;
+      clearTimeout(timer);
+      if (ws && ws.readyState < WebSocket.CLOSING) {
+        ws.close();
+      }
       websocketRef.current = null;
       setIsConnected(false);
     };
@@ -349,14 +365,23 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
 
       if (response.ok) {
         const data = await response.json();
+        setShowWelcome(false);
         const confirmation: Message = {
           id: Date.now().toString(),
-          text: data.message || 'Document uploaded successfully. ✅',
+          text: data.message || `${uploadDocType.replace('_', ' ').toUpperCase()} uploaded successfully! ✅`,
           sender: 'bot',
           timestamp: new Date(),
           agentType: 'document',
         };
         setMessages(prev => [...prev, confirmation]);
+
+        // Automatically inform the multi-agent workflow over WebSocket
+        if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
+          setIsTyping(true);
+          websocketRef.current.send(JSON.stringify({
+            content: `__doc_uploaded__:${uploadDocType}:${data.filename || ''}`
+          }));
+        }
       } else {
         const errorText = await response.text();
         const errorMsg: Message = {
@@ -788,7 +813,7 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
                 </div>
 
                 {/* Quick Replies */}
-                {messages.length <= 2 && (
+                {messages.length <= 4 && (
                   <div className="px-8 py-3 relative z-10">
                     <div className="max-w-3xl mx-auto flex gap-2 overflow-x-auto pb-2">
                       {quickReplies.map((reply, index) => (

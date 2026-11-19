@@ -1,6 +1,7 @@
 """
-Synthetic customer data for demo purposes
-10 customers with realistic Indian NBFC loan profiles
+Synthetic customer data for NBFC Loan Chatbot
+10 diverse customer profiles with realistic Indian financial metrics
+Includes Offer Mart, CRM KYC data, and Credit Bureau simulation
 """
 
 MOCK_CUSTOMERS = [
@@ -41,7 +42,7 @@ MOCK_CUSTOMERS = [
         "city": "Delhi",
         "address": "789 Connaught Place, New Delhi 110001",
         "kyc_verified": True,
-        "credit_score": 695,
+        "credit_score": 715,
         "pre_approved_limit": 300000,
         "monthly_salary": 65000,
         "current_loans": {"personal_loan": 150000}
@@ -69,7 +70,7 @@ MOCK_CUSTOMERS = [
         "city": "Pune",
         "address": "654 Koregaon Park, Pune 411001",
         "kyc_verified": True,
-        "credit_score": 680,
+        "credit_score": 680,  # Demonstrates credit score < 700 edge-case rejection
         "pre_approved_limit": 400000,
         "monthly_salary": 75000,
         "current_loans": {"home_loan": 3000000, "personal_loan": 100000}
@@ -82,8 +83,8 @@ MOCK_CUSTOMERS = [
         "age": 26,
         "city": "Chennai",
         "address": "987 T Nagar, Chennai 600017",
-        "kyc_verified": False,
-        "credit_score": 720,
+        "kyc_verified": False,  # Needs KYC verification flow
+        "credit_score": 730,
         "pre_approved_limit": 250000,
         "monthly_salary": 55000,
         "current_loans": {}
@@ -125,7 +126,7 @@ MOCK_CUSTOMERS = [
         "city": "Chandigarh",
         "address": "369 Sector 17, Chandigarh 160017",
         "kyc_verified": True,
-        "credit_score": 660,
+        "credit_score": 660,  # Demonstrates credit score < 700 rejection
         "pre_approved_limit": 350000,
         "monthly_salary": 70000,
         "current_loans": {"personal_loan": 200000}
@@ -147,26 +148,32 @@ MOCK_CUSTOMERS = [
 ]
 
 
-# Pre-approved offers based on customer profile
+# Offer Mart: Pre-approved offers mapped to each customer
 OFFER_MART = {
-    "cust_001": {
+    c["id"]: {
         "offers": [
-            {"amount": 500000, "tenure": 36, "interest_rate": 10.5, "processing_fee": 0},
-            {"amount": 300000, "tenure": 24, "interest_rate": 10.0, "processing_fee": 0},
+            {
+                "amount": c["pre_approved_limit"],
+                "tenure": 36,
+                "interest_rate": 10.5 if c["credit_score"] >= 750 else 11.5,
+                "processing_fee": 0
+            },
+            {
+                "amount": int(c["pre_approved_limit"] * 0.6),
+                "tenure": 24,
+                "interest_rate": 10.0 if c["credit_score"] >= 750 else 11.0,
+                "processing_fee": 0
+            }
         ]
-    },
-    "cust_002": {
-        "offers": [
-            {"amount": 750000, "tenure": 48, "interest_rate": 9.5, "processing_fee": 0},
-            {"amount": 500000, "tenure": 36, "interest_rate": 9.0, "processing_fee": 0},
-        ]
-    },
-    # Add more offers for other customers...
+    }
+    for c in MOCK_CUSTOMERS
 }
 
 
 def get_customer_by_email(email: str):
     """Get mock customer data by email"""
+    if not email:
+        return None
     for customer in MOCK_CUSTOMERS:
         if customer["email"].lower() == email.lower():
             return customer
@@ -182,5 +189,5 @@ def get_customer_by_id(customer_id: str):
 
 
 def get_offers_for_customer(customer_id: str):
-    """Get pre-approved offers for a customer"""
+    """Get pre-approved offers for a customer from Offer Mart"""
     return OFFER_MART.get(customer_id, {"offers": []})

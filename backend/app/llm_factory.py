@@ -1,44 +1,56 @@
 """
-LLM Factory - Provides Groq LLM (Llama 3.1) for all agents
-FREE tier - very fast inference
+LLM Factory - Provides Groq LLMs for all agents
+Conversational (temp 0.7) for master/sales, analytical (temp 0.3) for verification/underwriting/sanction,
+and vision (temp 0.1) for document OCR (Aadhaar, PAN, Salary Slip).
 """
+import logging
 from langchain_groq import ChatGroq
-from langchain.chat_models.base import BaseChatModel
 from app.config import get_settings
 
-settings = get_settings()
+logger = logging.getLogger(__name__)
 
 
-class LLMFactory:
-    """Factory to create Groq LLM for agents"""
-    
-    @staticmethod
-    def get_llm(temperature: float = 0.7) -> BaseChatModel:
-        """
-        Get Groq LLM (Llama 3.1) with specified temperature.
-        
-        - FREE tier with generous limits
-        - Very fast inference (~500 tokens/sec)
-        - Model: llama-3.1-8b-instant
-        """
-        if not settings.GROQ_API_KEY:
-            raise ValueError(
-                "GROQ_API_KEY not set!\n"
-                "Get your FREE API key at: https://console.groq.com\n"
-                "Then add to your .env file: GROQ_API_KEY=gsk_your_key_here"
-            )
-        
-        return ChatGroq(
-            api_key=settings.GROQ_API_KEY,
-            model=settings.GROQ_MODEL,
-            temperature=temperature,
-            max_tokens=1024
-        )
+def get_conversational_llm() -> ChatGroq:
+    """High-temperature LLM for natural, empathetic conversation (master, sales, document agents)."""
+    settings = get_settings()
+    return ChatGroq(
+        api_key=settings.GROQ_API_KEY,
+        model=settings.GROQ_MODEL,
+        temperature=0.7,
+        max_tokens=1024,
+    )
 
 
-# Singleton instances
-# Higher temperature (0.7) for conversational agents (Master, Sales)
-conversational_llm = LLMFactory.get_llm(temperature=0.7)
+def get_analytical_llm() -> ChatGroq:
+    """Low-temperature LLM for structured decisions (verification, underwriting, sanction)."""
+    settings = get_settings()
+    return ChatGroq(
+        api_key=settings.GROQ_API_KEY,
+        model=settings.GROQ_MODEL,
+        temperature=0.2,
+        max_tokens=1024,
+    )
 
-# Lower temperature (0.3) for analytical agents (Verification, Underwriting, Sanction)
-analytical_llm = LLMFactory.get_llm(temperature=0.3)
+
+def get_vision_llm() -> ChatGroq:
+    """Vision-capable LLM for document OCR — reads images and PDFs directly."""
+    settings = get_settings()
+    return ChatGroq(
+        api_key=settings.GROQ_API_KEY,
+        model=settings.GROQ_VISION_MODEL,
+        temperature=0.1,
+        max_tokens=1024,
+    )
+
+
+# Module-level instances with fallback
+try:
+    conversational_llm = get_conversational_llm()
+    analytical_llm = get_analytical_llm()
+    vision_llm = get_vision_llm()
+    logger.info("LLM instances initialized successfully.")
+except Exception as e:
+    logger.warning("LLM initialization warning: %s", e)
+    conversational_llm = None
+    analytical_llm = None
+    vision_llm = None

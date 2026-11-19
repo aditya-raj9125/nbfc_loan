@@ -53,6 +53,9 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # Active WebSocket connections
 active_connections: Dict[str, WebSocket] = {}
 
+# In-memory document registry to synchronize uploads with active chat sessions
+ACTIVE_CUSTOMER_DOCS: Dict[str, Dict[str, str]] = {}
+
 
 @app.get("/")
 async def root():
@@ -205,6 +208,17 @@ async def upload_document(
             shutil.copyfileobj(file.file, buffer)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+
+    # Synchronize with active WebSocket state registry
+    if customer_id not in ACTIVE_CUSTOMER_DOCS:
+        ACTIVE_CUSTOMER_DOCS[customer_id] = {}
+    ACTIVE_CUSTOMER_DOCS[customer_id][document_type] = filename
+    if customer and customer.id:
+        if str(customer.id) not in ACTIVE_CUSTOMER_DOCS:
+            ACTIVE_CUSTOMER_DOCS[str(customer.id)] = {}
+        ACTIVE_CUSTOMER_DOCS[str(customer.id)][document_type] = filename
+    if customer_id == "guest":
+        ACTIVE_CUSTOMER_DOCS.setdefault("guest", {})[document_type] = filename
 
     # Run basic OCR / parsing for supported document types and update customer data
     extracted_data = None
@@ -481,7 +495,12 @@ async def websocket_endpoint(
         "is_guest": is_guest,
         "is_mock_user": is_mock_user,
         "needs_onboarding": needs_onboarding,
-        "onboarding_step": "name" if is_guest else ("phone" if needs_onboarding else None)
+        "onboarding_step": "name" if is_guest else ("phone" if needs_onboarding else None),
+        "uploaded_documents": dict(
+            ACTIVE_CUSTOMER_DOCS.get(customer_id, {})
+            or ACTIVE_CUSTOMER_DOCS.get(str(customer.id), {})
+            or (ACTIVE_CUSTOMER_DOCS.get("guest", {}) if is_guest else {})
+        )
     }
     
     # Send welcome message based on user type
@@ -559,9 +578,42 @@ Are you looking for a loan, or would you like to check your eligibility first?""
             db.add(user_db_msg)
             db.commit()
             
+            # Synchronize any newly uploaded documents into active state
+            latest_docs = (
+                ACTIVE_CUSTOMER_DOCS.get(customer_id, {})
+                or ACTIVE_CUSTOMER_DOCS.get(str(customer.id), {})
+                or (ACTIVE_CUSTOMER_DOCS.get("guest", {}) if is_guest else {})
+            )
+            if latest_docs:
+                if "uploaded_documents" not in state or state["uploaded_documents"] is None:
+                    state["uploaded_documents"] = {}
+                state["uploaded_documents"].update(latest_docs)
+
             # Process with complete workflow
             from app.agents.workflow import loan_workflow
             state = await loan_workflow.process_message(state, user_message)
+
+            # Persist loan application to SQLite database upon sanction approval
+            if state.get("application_status") == "approved" and not state.get("loan_application_persisted"):
+                try:
+                    loan_app = models.LoanApplication(
+                        customer_id=customer.id,
+                        amount=float(state.get("loan_amount") or 0.0),
+                        tenure_months=int(state.get("tenure_months") or 36),
+                        interest_rate=float(state.get("interest_rate") or 10.5),
+                        emi_amount=float(state.get("emi_amount") or 0.0),
+                        status="approved",
+                        sanction_letter_url=state.get("sanction_letter_url"),
+                        extra_data={"credit_score": state.get("credit_score")}
+                    )
+                    db.add(loan_app)
+                    db.commit()
+                    db.refresh(loan_app)
+                    conversation.loan_application_id = loan_app.id
+                    db.commit()
+                    state["loan_application_persisted"] = True
+                except Exception as db_err:
+                    print(f"[DB] Error persisting approved loan application: {db_err}")
             
             bot_response = state["bot_response"]
             current_agent = state.get("next_agent", "master")

@@ -1,510 +1,245 @@
 """
-Sales Agent - Loan Discussion and Options
-Uses Groq LLM for dynamic, personalized responses
+Sales Agent - Loan Terms Structuring, Negotiation & Persuasion
+Worker Agent in the Agentic Architecture.
+Calculates EMI, presents personalized options, handles objections, and routes to Verification/Document.
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import re
-import random
-from langchain.schema import HumanMessage, SystemMessage
 from app.agents.state import LoanApplicationState
-from app.llm_factory import conversational_llm
-
-
-SALES_SYSTEM_PROMPT = """You are Shruti, a friendly loan sales assistant at NBFC Finance.
-
-Your personality:
-- Warm, helpful, and never pushy
-- Clear and transparent about terms
-- Use simple language, short paragraphs
-- Light emojis occasionally (🙂, ✅) but don't overdo it
-- Show empathy for financial concerns
-
-Your task: Generate a personalized response for the loan sales scenario provided.
-
-Guidelines:
-- Keep responses concise (3-5 short paragraphs max)
-- Always include disclaimers for estimates ("This is an estimate - final terms depend on verification")
-- Never guarantee approval - use "likely eligible" or "estimates"
-- If showing EMI, format clearly with bullet points
-- For hesitation, be understanding and offer alternatives
-- For questions, answer directly and helpfully
-
-IMPORTANT: Generate ONLY the response message. No meta-commentary."""
+from app.llm_factory import get_conversational_llm
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 
 class SalesAgent:
     """
-    Sales Agent - Presents loan options clearly and helpfully.
-    Empathetic, transparent, never pushy.
+    Sales Agent: Negotiates loan terms, discusses customer needs, amount,
+    tenure, and interest rates, and persuades customer to proceed.
     """
-    
-    def _get_display_name(self, raw_name: str) -> str:
-        """Get proper display name, avoiding greetings as names"""
+
+    def _get_display_name(self, raw_name: Optional[str]) -> str:
         if not raw_name:
             return "there"
-        greetings = ["hi", "hello", "hey", "hii", "hiii", "namaste"]
-        first_name = raw_name.split()[0].lower()
-        if first_name in greetings:
+        greetings = ["hi", "hello", "hey", "friend", "guest"]
+        first_name = raw_name.strip().split()[0].title()
+        if first_name.lower() in greetings:
             return "there"
-        return raw_name.split()[0]
-    
-    async def run(self, state: LoanApplicationState) -> Dict[str, Any]:
-        """
-        Handle sales conversation - present loan offers with EMI calculations.
-        """
-        user_message = state.get("user_message", "")
-        
-        # Get customer name, handle edge cases
-        raw_name = state.get("customer_name", "")
-        customer_name = self._get_display_name(raw_name)
-        
-        # For new users these fields may be None; fall back to safe defaults
-        pre_approved = state.get("pre_approved_limit") or 500000
-        monthly_salary = state.get("monthly_salary") or 50000
-        credit_score = state.get("credit_score") or 750
-        
-        # Get loan amount - first from state (set by master), then try to extract from message
-        loan_amount = state.get("loan_amount") or self._extract_amount(user_message)
-        tenure = self._extract_tenure(user_message) or state.get("tenure_months")
-        purpose = self._extract_purpose(user_message) or state.get("loan_purpose")
-        
-        # Debug logging
-        print(f"[SALES] Amount: {loan_amount}, Pre-approved: {pre_approved}, Message: {user_message[:30]}...")
-        
-        updates = {}
-        
-        # Check user intent
-        intent = self._analyze_sales_intent(user_message)
-        
-        # If user is hesitating or has concerns
-        if intent == "hesitation":
-            response = await self._handle_hesitation(customer_name, user_message, pre_approved)
-            updates["bot_response"] = response
-            updates["current_stage"] = "sales"
-            updates["next_agent"] = "sales"
-            return updates
-        
-        # If user is asking questions
-        if intent == "question":
-            response = await self._answer_question(customer_name, user_message, pre_approved, state)
-            updates["bot_response"] = response
-            updates["current_stage"] = "sales"
-            updates["next_agent"] = "sales"
-            return updates
-        
-        # If user agrees and EMI was already presented, proceed to next step
-        emi_presented = state.get("emi_presented", False)
-        application_status = state.get("application_status", "pending")
-        
-        if intent == "agreement" and loan_amount and emi_presented:
-            # Route based on application status
-            if application_status == "needs_documents":
-                updates["next_agent"] = "document"
-                updates["current_stage"] = "document_collection"
-                updates["bot_response"] = f"""Great, {customer_name}! Since the amount is above your pre-approved limit, I'll need a few documents.
+        return first_name
 
-Let me guide you through the upload process..."""
-            else:
-                # Pre-approved or standard flow - go to verification
+    def _calculate_interest_rate(self, amount: float, state: LoanApplicationState) -> float:
+        """Dynamic interest rate based on credit score & loan amount"""
+        base_rate = 11.0
+        score = state.get("credit_score") or 750
+        pre_approved = state.get("pre_approved_limit") or 500000
+
+        if score >= 800:
+            base_rate -= 1.5  # 9.5%
+        elif score >= 750:
+            base_rate -= 0.5  # 10.5%
+        elif score < 700:
+            base_rate += 1.5  # 12.5%
+
+        # Small premium if amount exceeds pre-approved limit
+        if amount > pre_approved:
+            base_rate += 0.5
+
+        return round(base_rate, 2)
+
+    def _calculate_emi(self, principal: float, annual_rate: float, tenure_months: int) -> float:
+        """Standard reducing balance EMI formula"""
+        if principal <= 0 or tenure_months <= 0:
+            return 0.0
+        monthly_r = (annual_rate / 12.0) / 100.0
+        numerator = principal * monthly_r * ((1.0 + monthly_r) ** tenure_months)
+        denominator = ((1.0 + monthly_r) ** tenure_months) - 1.0
+        if denominator == 0:
+            return round(principal / tenure_months, 2)
+        return round(numerator / denominator, 2)
+
+    def _suggest_tenure(self, amount: float, monthly_salary: float) -> int:
+        """Suggest optimal tenure so EMI stays comfortable (30-35% of monthly income)"""
+        salary = monthly_salary if monthly_salary and monthly_salary > 0 else 70000.0
+        target_emi = salary * 0.35
+
+        # Heuristic search through standard tenures: 12, 24, 36, 48, 60
+        standard_tenures = [12, 24, 36, 48, 60]
+        best_tenure = 36
+        min_diff = float("inf")
+
+        for t in standard_tenures:
+            emi = self._calculate_emi(amount, 10.5, t)
+            diff = abs(emi - target_emi)
+            if diff < min_diff:
+                min_diff = diff
+                best_tenure = t
+
+        return best_tenure
+
+    async def run(self, state: LoanApplicationState) -> Dict[str, Any]:
+        """Execute Sales negotiation turn"""
+        user_message = state.get("user_message", "").strip()
+        customer_name = self._get_display_name(state.get("customer_name"))
+        pre_approved = state.get("pre_approved_limit") or 500000.0
+        monthly_salary = state.get("monthly_salary") or 75000.0
+
+        # Check for newly updated amount or tenure in message
+        extracted_amount = self._extract_amount(user_message)
+        extracted_tenure = self._extract_tenure(user_message)
+
+        loan_amount = extracted_amount or state.get("loan_amount") or pre_approved
+        tenure = extracted_tenure or state.get("tenure_months") or self._suggest_tenure(loan_amount, monthly_salary)
+        interest_rate = self._calculate_interest_rate(loan_amount, state)
+        emi = self._calculate_emi(loan_amount, interest_rate, tenure)
+
+        updates: Dict[str, Any] = {
+            "loan_amount": loan_amount,
+            "tenure_months": tenure,
+            "interest_rate": interest_rate,
+            "emi_amount": emi,
+            "emi_presented": True,
+            "offer_presented": True
+        }
+
+        # Analyze intent for acceptance vs negotiation
+        msg_lower = user_message.lower()
+        is_agreement = any(
+            phrase in msg_lower
+            for phrase in [
+                "yes", "ok", "okay", "sure", "proceed", "agree", "let's do it",
+                "go ahead", "sounds good", "perfect", "deal", "accept", "apply", "continue"
+            ]
+        )
+
+        emi_was_shown = state.get("emi_presented", False)
+
+        # If user accepts terms after seeing the EMI, hand off to Verification or Document
+        if is_agreement and emi_was_shown and not extracted_amount and not extracted_tenure:
+            if loan_amount <= pre_approved:
                 updates["next_agent"] = "verification"
                 updates["current_stage"] = "verification"
-                updates["bot_response"] = f"""Great, {customer_name}! Let me verify your details quickly.
-
-This will just take a moment..."""
-            return updates
-        
-        # If amount is mentioned (either from state or extracted)
-        if loan_amount:
-            updates["loan_amount"] = loan_amount
-            
-            # Calculate interest rate based on amount and profile
-            interest_rate = self._calculate_interest_rate(loan_amount, state)
-            updates["interest_rate"] = interest_rate
-            
-            # Suggest optimal tenure based on salary
-            if not tenure:
-                tenure = self._suggest_tenure(loan_amount, monthly_salary)
-            updates["tenure_months"] = tenure
-            
-            # Calculate EMI
-            emi = self._calculate_emi(loan_amount, interest_rate, tenure)
-            updates["emi_amount"] = emi
-            
-            # Store purpose if mentioned
-            if purpose:
-                updates["loan_purpose"] = purpose
-            
-            # Generate personalized response based on scenario
-            response = await self._generate_offer_response(
-                customer_name=customer_name,
-                loan_amount=loan_amount,
-                pre_approved=pre_approved,
-                tenure=tenure,
-                interest_rate=interest_rate,
-                emi=emi,
-                monthly_salary=monthly_salary,
-                credit_score=credit_score,
-                purpose=purpose
-            )
-            
-            updates["bot_response"] = response
-            updates["current_stage"] = "sales"
-            updates["emi_presented"] = True  # Mark that EMI offer was shown
-            updates["next_agent"] = "sales"  # Stay in sales to handle user response
-            
-            # Set application status based on amount vs pre-approved
-            if loan_amount <= pre_approved:
-                updates["application_status"] = "pre_approved"
+                updates["application_status"] = "pending"
+                bot_text = (
+                    f"Excellent choice, {customer_name}! Your loan terms of Rs. {loan_amount:,.0f} "
+                    f"at {interest_rate}% for {tenure} months (EMI: Rs. {emi:,.0f}/mo) are locked in. "
+                    f"Let me instantly confirm your KYC status with our CRM so we can issue your sanction letter."
+                )
             elif loan_amount <= pre_approved * 2:
+                updates["next_agent"] = "document"
+                updates["current_stage"] = "document_upload"
                 updates["application_status"] = "needs_documents"
+                bot_text = (
+                    f"Wonderful, {customer_name}! Since Rs. {loan_amount:,.0f} exceeds your instant pre-approved "
+                    f"limit of Rs. {pre_approved:,.0f}, our underwriting policy requires a quick salary slip to verify income. "
+                    f"Could you please upload your latest salary slip using the 📎 button?"
+                )
             else:
+                updates["next_agent"] = "sales"
+                updates["current_stage"] = "sales"
                 updates["application_status"] = "needs_negotiation"
-        
-        else:
-            # No amount mentioned yet - engage in discovery
-            response = await self._get_discovery_response(customer_name, pre_approved, user_message)
-            updates["bot_response"] = response
-            updates["current_stage"] = "sales"
-            updates["next_agent"] = "sales"
-        
-        return updates
-    
-    def _analyze_sales_intent(self, message: str) -> str:
-        """Analyze user's intent in sales context"""
-        msg = message.lower().strip()
-        
-        # Check for amount first - if user provides amount, that's the main intent
-        if self._extract_amount(message):
-            return "amount_provided"
-        
-        # Agreement signals
-        if msg in ["yes", "ok", "okay", "sure", "yep", "yeah", "fine", "alright", "proceed", "go ahead"]:
-            return "agreement"
-        
-        # Strong agreement
-        if any(phrase in msg for phrase in ["let's do", "lets do", "go ahead", "proceed", "i want", "i need"]):
-            return "agreement"
-        
-        # Questions
-        if "?" in msg or any(w in msg for w in ["what", "how", "why", "when", "tell me", "explain"]):
-            return "question"
-        
-        # Hesitation (only clear hesitation)
-        hesitation_phrases = ["expensive", "too high", "too much", "can't afford", "not sure", "think about", "maybe later"]
-        if any(phrase in msg for phrase in hesitation_phrases):
-            return "hesitation"
-        
-        return "general"
-    
-    def _extract_purpose(self, text: str) -> str:
-        """Extract loan purpose from message"""
-        msg = text.lower()
-        
-        purposes = {
-            "car": ["car", "vehicle", "bike", "scooter"],
-            "home": ["home", "house", "flat", "renovation", "interior"],
-            "wedding": ["wedding", "marriage", "shaadi"],
-            "education": ["education", "study", "college", "course"],
-            "medical": ["medical", "hospital", "treatment", "surgery"],
-            "travel": ["travel", "vacation", "trip", "holiday"],
-            "business": ["business", "startup", "shop"],
-            "debt_consolidation": ["debt", "loan", "emi", "consolidate"],
-            "emergency": ["emergency", "urgent", "immediate"]
-        }
-        
-        for purpose, keywords in purposes.items():
-            if any(k in msg for k in keywords):
-                return purpose
-        
-        return None
-    
-    def _suggest_tenure(self, amount: float, salary: float) -> int:
-        """Suggest optimal tenure based on affordability"""
-        # Target EMI should be around 30-40% of salary
-        target_emi = salary * 0.35
-        
-        # Calculate tenure needed for target EMI (approximate)
-        # Using simple calculation: tenure = amount / (target_emi * 0.9)
-        suggested_tenure = int(amount / (target_emi * 0.9))
-        
-        # Round to nearest 12 months and cap between 12-60
-        suggested_tenure = max(12, min(60, (suggested_tenure // 12) * 12))
-        
-        return suggested_tenure
-    
-    async def _generate_offer_response(
-        self, customer_name: str, loan_amount: float, pre_approved: float,
-        tenure: int, interest_rate: float, emi: float, monthly_salary: float,
-        credit_score: int, purpose: str
-    ) -> str:
-        """Generate clear, helpful offer response using LLM"""
-        
-        emi_to_salary_ratio = (emi / monthly_salary) * 100 if monthly_salary else 0
+                bot_text = (
+                    f"{customer_name}, as discussed, Rs. {loan_amount:,.0f} exceeds our single-applicant credit ceiling of Rs. {pre_approved * 2:,.0f}. "
+                    f"We can immediately approve Rs. {pre_approved:,.0f} today with zero extra paperwork. Would you like to proceed with that?"
+                )
+
+            updates["bot_response"] = bot_text
+            self._record_conversation(state, user_message, bot_text)
+            return updates
+
+        # Otherwise, synthesize an intelligent, persuasive sales offer via LLM
         years = tenure // 12
-        tenure_text = f"{years} year{'s' if years > 1 else ''}" if tenure >= 12 else f"{tenure} months"
-        
-        # Determine scenario
-        if loan_amount <= pre_approved:
-            scenario_type = "pre_approved"
-            scenario = f"""SCENARIO: Loan Amount Within Pre-Approved Limit
+        tenure_desc = f"{years} year{'s' if years > 1 else ''}" if tenure % 12 == 0 else f"{tenure} months"
 
-Customer: {customer_name}
-Purpose: {purpose or 'Not specified'}
-Requested Amount: ₹{loan_amount:,.0f}
-Pre-approved Limit: ₹{pre_approved:,.0f}
+        scenario_category = (
+            "INSTANT_PRE_APPROVED"
+            if loan_amount <= pre_approved
+            else ("NEEDS_SALARY_SLIP" if loan_amount <= pre_approved * 2 else "EXCEEDS_MAX_CAP")
+        )
 
-Offer Details:
-- Tenure: {tenure_text}
-- Interest Rate: {interest_rate}% per year (estimated)
-- Monthly EMI: ₹{emi:,.0f}
-- EMI as % of income: {emi_to_salary_ratio:.0f}%
+        system_prompt = f"""You are Shruti, the senior loan specialist at NBFC Finance.
+You are negotiating loan terms with {customer_name}.
 
-Generate a friendly response presenting this offer. Mention:
-1. The loan details clearly
-2. EMI is comfortable relative to income
-3. Add disclaimer about estimates
-4. Next step is KYC verification - ask if they want to proceed"""
-        
-        elif loan_amount <= pre_approved * 2:
-            scenario_type = "needs_documents"
-            scenario = f"""SCENARIO: Loan Amount Above Pre-Approved (Needs Documents)
+FINANCIAL PARAMETERS:
+- Requested Loan: Rs. {loan_amount:,.0f}
+- Pre-approved Benchmark: Rs. {pre_approved:,.0f}
+- Proposed Tenure: {tenure_desc} ({tenure} months)
+- Interest Rate: {interest_rate}% per annum
+- Monthly EMI: Rs. {emi:,.0f}
+- Scenario: {scenario_category}
 
-Customer: {customer_name}
-Requested Amount: ₹{loan_amount:,.0f}
-Pre-approved Limit: ₹{pre_approved:,.0f}
+ROLE & PERSUASION GOAL:
+1. Present the loan offer with crystal clarity: Amount, Tenure, Rate, and exact Monthly EMI (in Rs.).
+2. Highlight why this is an attractive deal: zero prepayment charges after 6 months, instant processing, minimal friction.
+3. If {scenario_category} == 'INSTANT_PRE_APPROVED': Emphasize that approval will be instant upon brief KYC verification.
+4. If {scenario_category} == 'NEEDS_SALARY_SLIP': Explain clearly that because it's up to 2x pre-approved, submitting one salary slip will enable immediate credit sanction.
+5. If {scenario_category} == 'EXCEEDS_MAX_CAP': Gently suggest capping at Rs. {pre_approved:,.0f} for instant disbursement today.
+6. End with a friendly, direct call to action asking if this EMI works for them. Keep length to 3-5 concise sentences."""
 
-Offer Details:
-- Tenure: {tenure_text}
-- Interest Rate: {interest_rate}% per year (estimated)
-- Monthly EMI: ₹{emi:,.0f}
+        messages: List[Any] = [SystemMessage(content=system_prompt)]
+        context_history = state.get("conversation_context", [])
+        for turn in context_history[-6:]:
+            if turn.get("role") in ["user", "customer"]:
+                messages.append(HumanMessage(content=turn.get("content", "")))
+            else:
+                messages.append(AIMessage(content=turn.get("content", "")))
+        messages.append(HumanMessage(content=user_message))
 
-Generate a response explaining:
-1. The offer details
-2. Amount is above pre-approved, so documents needed (salary slip, Aadhaar, PAN)
-3. Approval usually takes 24 hours after documents
-4. Add disclaimer about estimates
-5. Ask if they want to proceed with documents"""
-        
-        else:
-            scenario_type = "too_high"
-            suggested_amount = min(pre_approved * 1.5, loan_amount * 0.7)
-            suggested_emi = self._calculate_emi(suggested_amount, interest_rate, tenure)
-            pre_approved_emi = self._calculate_emi(pre_approved, interest_rate - 0.5, tenure)
-            
-            scenario = f"""SCENARIO: Loan Amount Too High - Offer Alternatives
-
-Customer: {customer_name}
-Requested Amount: ₹{loan_amount:,.0f}
-Pre-approved Limit: ₹{pre_approved:,.0f}
-
-Be upfront that the requested amount is too high. Offer alternatives:
-Option 1: ₹{suggested_amount:,.0f} with EMI ~₹{suggested_emi:,.0f}/month (needs income verification)
-Option 2: ₹{pre_approved:,.0f} with EMI ~₹{pre_approved_emi:,.0f}/month (minimal docs)
-
-Mention they can get top-up after 6-12 months of repayment.
-Ask which option they'd like to explore."""
-        
-        # Generate response using LLM
+        llm = get_conversational_llm()
         try:
-            messages = [
-                SystemMessage(content=SALES_SYSTEM_PROMPT),
-                HumanMessage(content=scenario)
-            ]
-            llm_response = await conversational_llm.ainvoke(messages)
-            return llm_response.content.strip()
+            resp = await llm.ainvoke(messages)
+            bot_text = str(resp.content).strip()
         except Exception as e:
-            print(f"[SALES] LLM error: {e}")
-            # Fallback to simple response
-            return f"""Here's what I can offer for ₹{loan_amount:,.0f}:
+            bot_text = (
+                f"Here is your customized offer for Rs. {loan_amount:,.0f}:\n\n"
+                f"• **Tenure**: {tenure_desc}\n"
+                f"• **Interest Rate**: {interest_rate}% p.a.\n"
+                f"• **Monthly EMI**: Rs. {emi:,.0f}\n\n"
+                f"Does this monthly installment look comfortable for you?"
+            )
 
-- **Tenure**: {tenure_text}
-- **Interest rate**: {interest_rate}% per year (estimated)
-- **Monthly EMI**: ₹{emi:,.0f}
+        updates["bot_response"] = bot_text
+        updates["current_stage"] = "sales"
+        updates["next_agent"] = "sales"
 
-*This is an estimate - final terms depend on verification.*
+        self._record_conversation(state, user_message, bot_text)
+        return updates
 
-Would you like to proceed?"""
-    
-    def _get_purpose_comment(self, purpose: str) -> str:
-        """Get a brief, warm comment based on loan purpose"""
-        comments = {
-            "car": "A car - nice! 🙂",
-            "home": "Home expenses - that's a big step!",
-            "wedding": "Congratulations on the wedding! 🙂",
-            "education": "Education - great investment.",
-            "medical": "I'll try to make this quick for you.",
-            "travel": "A trip sounds great!",
-            "business": "Business funding - exciting!",
-            "emergency": "I understand this is urgent. Let me help.",
-            "debt_consolidation": "Consolidating debt can be a smart move."
-        }
-        return comments.get(purpose, "")
-    
-    async def _handle_hesitation(self, name: str, message: str, pre_approved: float) -> str:
-        """Handle customer concerns with empathy using LLM"""
-        scenario = f"""SCENARIO: Customer Hesitation
+    def _record_conversation(self, state: LoanApplicationState, user_msg: str, bot_msg: str):
+        if "conversation_context" not in state or state["conversation_context"] is None:
+            state["conversation_context"] = []
+        if user_msg:
+            state["conversation_context"].append({"role": "user", "content": user_msg})
+        if bot_msg:
+            state["conversation_context"].append({"role": "assistant", "content": bot_msg})
+        state["conversation_context"] = state["conversation_context"][-16:]
 
-Customer: {name}
-Their Message: "{message}"
-Pre-approved Amount: ₹{pre_approved:,.0f} if {pre_approved} else "Not available"
-
-The customer is hesitating. Generate an empathetic response that:
-1. Acknowledges their concern
-2. Provides helpful context (e.g., rate comparison if about rates)
-3. Offers alternatives or more information
-4. No pressure - let them know it's okay to take time
-5. Keep it brief and supportive"""
-        
-        try:
-            messages = [
-                SystemMessage(content=SALES_SYSTEM_PROMPT),
-                HumanMessage(content=scenario)
-            ]
-            llm_response = await conversational_llm.ainvoke(messages)
-            return llm_response.content.strip()
-        except Exception as e:
-            print(f"[SALES] LLM error in hesitation: {e}")
-            return f"I understand, {name}. Take your time - no pressure at all. Let me know if you have any questions."
-    
-    async def _answer_question(self, name: str, question: str, pre_approved: float, state: dict) -> str:
-        """Answer customer questions using LLM"""
-        loan_amount = state.get("loan_amount", 0)
-        
-        scenario = f"""SCENARIO: Customer Question
-
-Customer: {name}
-Their Question: "{question}"
-Pre-approved Amount: ₹{pre_approved:,.0f}
-Current Loan Amount (if any): ₹{loan_amount:,.0f}
-
-Answer their question helpfully. Common topics:
-- EMI: Explain factors (amount, tenure, rate), give examples if pre-approved amount available
-- Interest rates: Range from 10.5% to 16% based on credit score
-- Documents: Aadhaar, PAN required; salary slip for higher amounts
-- Timeline: Pre-approved = same day, higher amounts = 24-48 hours
-
-Keep response concise and helpful. Offer to calculate specific numbers if relevant."""
-        
-        try:
-            messages = [
-                SystemMessage(content=SALES_SYSTEM_PROMPT),
-                HumanMessage(content=scenario)
-            ]
-            llm_response = await conversational_llm.ainvoke(messages)
-            return llm_response.content.strip()
-        except Exception as e:
-            print(f"[SALES] LLM error in question: {e}")
-            return f"Great question, {name}! Let me help you with that. Could you tell me more about what you'd like to know?"
-    
-    async def _get_discovery_response(self, name: str, pre_approved: float, message: str) -> str:
-        """Engage customer in discovery using LLM"""
-        scenario = f"""SCENARIO: Discovery - Need Loan Amount
-
-Customer: {name}
-Their Message: "{message}"
-Pre-approved Amount: ₹{pre_approved:,.0f} if {pre_approved} else "Not determined yet"
-
-The customer hasn't mentioned a specific loan amount. Generate a friendly response that:
-1. Asks how much they're looking for
-2. Optionally asks what it's for (helps suggest tenure)
-3. If pre-approved amount available, mention they're likely eligible for up to that amount
-4. Keep it brief and conversational"""
-        
-        try:
-            messages = [
-                SystemMessage(content=SALES_SYSTEM_PROMPT),
-                HumanMessage(content=scenario)
-            ]
-            llm_response = await conversational_llm.ainvoke(messages)
-            return llm_response.content.strip()
-        except Exception as e:
-            print(f"[SALES] LLM error in discovery: {e}")
-            if pre_approved and pre_approved > 0:
-                return f"How much are you looking for, {name}? Based on your profile, you're likely eligible for up to ₹{pre_approved:,.0f}."
-            return f"How much are you looking for, {name}? Once I know, I can give you specific options."
-    
-    def _extract_amount(self, text: str) -> float:
-        """Extract loan amount from user message"""
-        text = text.lower()
-        
-        # Pattern for lakhs (e.g., "5 lakhs", "5 lakh", "5L")
-        lakh_pattern = r'(\d+(?:\.\d+)?)\s*(?:lakh|lakhs|l)\b'
-        lakh_match = re.search(lakh_pattern, text)
+    def _extract_amount(self, text: str) -> Optional[float]:
+        msg = text.lower().strip()
+        lakh_match = re.search(r"(\d+(?:\.\d+)?)\s*(?:lakhs?|lacs?|l\b)", msg)
         if lakh_match:
             return float(lakh_match.group(1)) * 100000
-        
-        # Pattern for thousands (e.g., "50000", "50k")
-        thousand_pattern = r'(\d+)k\b'
-        thousand_match = re.search(thousand_pattern, text)
-        if thousand_match:
-            return float(thousand_match.group(1)) * 1000
-        
-        # Pattern for direct numbers with ₹ or Rs
-        rupee_pattern = r'[₹rs\.]\s*(\d+(?:,\d+)*(?:\.\d+)?)'
-        rupee_match = re.search(rupee_pattern, text)
+        k_match = re.search(r"(\d+(?:\.\d+)?)\s*k\b", msg)
+        if k_match:
+            return float(k_match.group(1)) * 1000
+        rupee_match = re.search(r"(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)", msg)
         if rupee_match:
-            amount_str = rupee_match.group(1).replace(',', '')
-            return float(amount_str)
-        
-        # Pattern for plain large numbers (likely amounts)
-        number_pattern = r'\b(\d{5,})\b'
-        number_match = re.search(number_pattern, text)
-        if number_match:
-            return float(number_match.group(1))
-        
+            try:
+                return float(rupee_match.group(1).replace(",", ""))
+            except ValueError:
+                pass
+        plain_match = re.search(r"\b(\d{5,7})\b", msg)
+        if plain_match:
+            return float(plain_match.group(1))
         return None
-    
-    def _extract_tenure(self, text: str) -> int:
-        """Extract loan tenure from user message"""
-        text = text.lower()
-        
-        # Pattern for years
-        year_pattern = r'(\d+)\s*(?:year|years|yr|yrs)\b'
-        year_match = re.search(year_pattern, text)
-        if year_match:
-            return int(year_match.group(1)) * 12
-        
-        # Pattern for months
-        month_pattern = r'(\d+)\s*(?:month|months|mon)\b'
-        month_match = re.search(month_pattern, text)
-        if month_match:
-            return int(month_match.group(1))
-        
+
+    def _extract_tenure(self, text: str) -> Optional[int]:
+        msg = text.lower().strip()
+        yr_match = re.search(r"(\d+)\s*(?:years?|yrs?)", msg)
+        if yr_match:
+            return int(yr_match.group(1)) * 12
+        mo_match = re.search(r"(\d+)\s*(?:months?|mos?)", msg)
+        if mo_match:
+            return int(mo_match.group(1))
         return None
-    
-    def _calculate_interest_rate(self, amount: float, state: LoanApplicationState) -> float:
-        """Calculate interest rate based on amount and customer profile"""
-        # Coerce possible None values to sensible defaults
-        credit_score = state.get("credit_score") or 700
-        pre_approved = state.get("pre_approved_limit") or 0
-        
-        # Base rate
-        base_rate = 10.5
-        
-        # Adjust based on credit score
-        if credit_score >= 800:
-            base_rate -= 1.5
-        elif credit_score >= 750:
-            base_rate -= 1.0
-        elif credit_score >= 700:
-            base_rate -= 0.5
-        
-        # Adjust based on amount vs pre-approved
-        if pre_approved and amount > pre_approved:
-            base_rate += 1.0
-        
-        return round(base_rate, 2)
-    
-    def _calculate_emi(self, principal: float, rate: float, tenure: int) -> float:
-        """Calculate EMI using reducing balance method"""
-        monthly_rate = rate / (12 * 100)
-        
-        if monthly_rate == 0:
-            return principal / tenure
-        
-        emi = principal * monthly_rate * (1 + monthly_rate)**tenure / ((1 + monthly_rate)**tenure - 1)
-        return round(emi, 2)
 
 
-# Singleton instance
+# Global singleton instance
 sales_agent = SalesAgent()

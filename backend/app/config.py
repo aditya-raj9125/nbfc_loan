@@ -1,29 +1,32 @@
+import os
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
+# Find backend/.env path reliably
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_ENV_FILE = os.path.join(_BASE_DIR, ".env")
+
 
 class Settings(BaseSettings):
-    # Database
-    DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/nbfc_loan_db"
+    # Database - SQLite by default for zero-friction local run
+    DATABASE_URL: str = "sqlite:///./nbfc_loan.db"
     
-    # Redis
-    REDIS_URL: str = "redis://localhost:6379/0"
-    
-    # Groq Configuration (FREE - using Llama 3.1)
+    # Groq LLM Configuration
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-8b-instant"  # Fast & free
+    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_VISION_MODEL: str = "llama-3.2-11b-vision-preview"
     
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
     
     # External Credit Bureau API (optional)
-    CREDIT_API_URL: str = ""  # e.g. "https://api.yourcreditbureau.com/score"
-    CREDIT_API_KEY: str = ""  # set in .env for real integration
+    CREDIT_API_URL: str = ""
+    CREDIT_API_KEY: str = ""
     
     # Security
-    SECRET_KEY: str = "your-secret-key-change-this-in-production"
+    SECRET_KEY: str = "nbfc-loan-chatbot-super-secret-key-2025"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
     # File Upload
     UPLOAD_DIR: str = "./uploads"
@@ -34,8 +37,8 @@ class Settings(BaseSettings):
     MOCK_CREDIT_BUREAU_ENABLED: bool = True
     
     class Config:
-        env_file = ".env"
-        case_sensitive = True
+        env_file = _ENV_FILE if os.path.exists(_ENV_FILE) else ".env"
+        extra = "ignore"
 
 
 @lru_cache()
