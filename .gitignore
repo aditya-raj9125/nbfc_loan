@@ -1,41 +1,75 @@
-# Dependencies
+# ============================================================
+# NBFC Loan Chatbot — .gitignore
+# Stack: Next.js (TypeScript) + Python FastAPI backend
+# ============================================================
+
+# ------ Node / Next.js ------
 node_modules/
 .pnp/
 .pnp.js
-
-# Build outputs
 .next/
 out/
 build/
 dist/
 
-# Environment files
+# ------ Python backend ------
+backend/venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ------ Uploaded / generated files ------
+backend/uploads/
+diagrams/
+
+# ------ Environment & secrets ------
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+backend/.env
 
-# Debug logs
+# Google / Firebase service account keys
+*.json
+# Allow package.json, tsconfig.json, etc. (re-include explicit config files)
+!package.json
+!package-lock.json
+!tsconfig.json
+!next.config.js
+!postcss.config.js
+!tailwind.config.js
+!.vscode/settings.json
+
+# ------ Logs ------
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
 
-# IDE
+# ------ OS ------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ------ IDE ------
 .idea/
-.vscode/
 *.swp
 *.swo
 
-# OS files
-.DS_Store
-Thumbs.db
-
-# Testing
+# ------ Misc ------
 coverage/
-
-# Misc
-*.log
-
-# Local Netlify folder
 .netlify
+*.pdf
+image.png
+next-env.d.ts
