@@ -659,11 +659,11 @@ Are you looking for a loan, or would you like to check your eligibility first?""
                 }
             })
             
-            # Check if conversation should end
+            # Update conversation status in database
             if state.get("should_end"):
                 conversation.status = "completed"
                 db.commit()
-                break
+                # Keep WebSocket connection open for customer follow-up questions and consultative alternatives
     
     except WebSocketDisconnect:
         # Mark conversation as abandoned

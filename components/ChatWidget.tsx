@@ -109,6 +109,7 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
   const websocketRef = useRef<WebSocket | null>(null);
   const prevCustomerIdRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const typingSafetyTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -204,6 +205,7 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
             const safeAgent: keyof typeof agentInfo =
               (incomingAgent in agentInfo ? incomingAgent : 'master') as keyof typeof agentInfo;
             setCurrentAgent(safeAgent);
+            if (typingSafetyTimerRef.current) clearTimeout(typingSafetyTimerRef.current);
             setIsTyping(false);
           }
         } catch (e) {
@@ -212,18 +214,24 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
       };
 
       ws.onerror = () => {
+        if (typingSafetyTimerRef.current) clearTimeout(typingSafetyTimerRef.current);
         setIsConnected(false);
+        setIsTyping(false);
       };
 
       ws.onclose = () => {
         console.log('Chat WebSocket closed');
+        if (typingSafetyTimerRef.current) clearTimeout(typingSafetyTimerRef.current);
         setIsConnected(false);
+        setIsTyping(false);
+        websocketRef.current = null;
       };
     }, 100);
 
     return () => {
       isCancelled = true;
       clearTimeout(timer);
+      if (typingSafetyTimerRef.current) clearTimeout(typingSafetyTimerRef.current);
       if (ws && ws.readyState < WebSocket.CLOSING && prevCustomerIdRef.current !== currentCustomerId) {
         ws.close();
         websocketRef.current = null;
@@ -234,6 +242,12 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
 
   const simulateBotResponse = (userMessage: string) => {
     setIsTyping(true);
+
+    // Safety timeout: never allow typing indicator to remain stuck for more than 10 seconds
+    if (typingSafetyTimerRef.current) clearTimeout(typingSafetyTimerRef.current);
+    typingSafetyTimerRef.current = setTimeout(() => {
+      setIsTyping(false);
+    }, 10000);
 
     // If WebSocket is connected, send the message to backend and let agents respond
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {

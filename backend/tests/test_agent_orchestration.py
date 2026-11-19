@@ -123,10 +123,47 @@ class TestAgentOrchestration:
         state.update(updates)
 
         assert state.get("application_status") == "rejected"
-        assert state.get("should_end") is True
+        assert state.get("should_end") is False
         assert state.get("rejection_reason") is not None
         assert "700" in state["rejection_reason"]
         assert "below our threshold of 700" in state["rejection_reason"].lower()
+
+    @pytest.mark.asyncio
+    async def test_scenario_2b_adverse_action_objection_handling(self):
+        """
+        Scenario 2b: Adverse Action Objection Handling
+        Customer: Vikram Singh asks 'cant something be done' after rejection.
+        Expected: Master Agent consultatively advises 3 paths: co-applicant, secured loan, credit repair.
+        """
+        state: LoanApplicationState = {
+            "session_id": "test_session_vikram",
+            "customer_id": "cust_005",
+            "customer_name": "Vikram Singh",
+            "customer_email": "vikram.singh@email.com",
+            "pre_approved_limit": 400000.0,
+            "credit_score": 680,
+            "kyc_verified": True,
+            "loan_amount": 200000.0,
+            "tenure_months": 24,
+            "application_status": "rejected",
+            "current_stage": "underwriting",
+            "next_agent": "master",
+            "should_end": False,
+            "rejection_reason": "Credit score of 680 is below our threshold of 700.",
+            "conversation_context": []
+        }
+
+        state = await loan_workflow.process_message(state, "cant something be done")
+
+        assert state.get("current_stage") == "adverse_action_consultation"
+        assert state.get("bot_response") is not None
+        resp_lower = state["bot_response"].lower()
+        # Must offer constructive alternative options (joint/co-applicant, secured/collateral, or credit rebuild)
+        adverse_solution_terms = [
+            "co-applicant", "co-borrower", "joint", "guarantor", "secured",
+            "collateral", "asset", "credit score", "alternative", "option", "path"
+        ]
+        assert any(term in resp_lower for term in adverse_solution_terms)
 
     @pytest.mark.asyncio
     async def test_scenario_3_income_enhanced_approval_via_documents(self):

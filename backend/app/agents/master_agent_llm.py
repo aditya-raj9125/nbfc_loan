@@ -59,6 +59,10 @@ class MasterAgentLLM:
         current_stage = state.get("current_stage", "greeting")
         customer_name = self._get_display_name(state.get("customer_name"))
 
+        # 0. Adverse action / post-rejection consultative objection handling
+        if state.get("application_status") == "rejected":
+            return await self._handle_rejection_objection(state, user_message)
+
         # 1. Check if user is in onboarding (for guests/new visitors)
         if state.get("needs_onboarding", False):
             return await self._handle_onboarding(state, user_message)
@@ -195,7 +199,59 @@ GUIDELINES (EY Top-Tier Executive Standards):
             )
         return (
             f"Hi {name}! Welcome to NBFC Finance. I'm Shruti, your loan advisor. We offer instant unsecured personal loans "
-            f"from Rs. 50,000 to Rs. 15,00,000 at competitive rates. How much funding are you looking for?"
+            f"from Rs. 50,00,000 to Rs. 15,00,000 at competitive rates. How much funding are you looking for?"
+        )
+
+    async def _handle_rejection_objection(self, state: LoanApplicationState, user_message: str) -> Dict[str, Any]:
+        """Consultative objection handling when an application was previously rejected"""
+        import logging
+        logger = logging.getLogger(__name__)
+        customer_name = self._get_display_name(state.get("customer_name"))
+        credit_score = state.get("credit_score") or 680
+
+        system_prompt = f"""You are Shruti, the empathetic and expert loan advisor at NBFC Finance.
+Customer {customer_name} has had their unsecured personal loan application declined because their credit score is {credit_score}/900 (minimum required threshold is 700).
+
+The customer is following up with: "{user_message}".
+
+ROLE & CONSULTATIVE GUIDELINES:
+1. Be warm, empathetic, and constructive. Acknowledge their situation with dignity.
+2. Clearly outline 3 viable alternative financing solutions:
+   • Co-Borrower / Co-Applicant: Add an immediate family member (spouse, parent, earning sibling) with a CIBIL score of 720+ for instant joint underwriting.
+   • Secured Loan Options: Convert to Loan Against Property (LAP) or loan against FD/mutual funds where credit score restrictions are relaxed.
+   • Credit Improvement: Clearing overdue card balances to bring credit utilization under 30% typically improves bureau score by 20-40 points within 60-90 days.
+3. If they asked for a lower loan amount: Clarify that the minimum credit score requirement applies across all unsecured amounts under NBFC risk policy, so a co-applicant or secured loan is the quickest path.
+4. Keep the response concise, formatted with clear bullet points, and offer to help them set up a co-applicant or secured application."""
+
+        messages = self._build_messages_with_history(state, system_prompt, user_message)
+        llm = get_conversational_llm()
+
+        try:
+            resp = await llm.ainvoke(messages)
+            bot_text = str(resp.content).strip()
+        except Exception as e:
+            logger.warning(f"[MasterAgent] Adverse action LLM call failed, using fallback: {e}")
+            bot_text = self._rejection_objection_fallback(customer_name, credit_score)
+
+        updates: Dict[str, Any] = {
+            "bot_response": bot_text,
+            "current_stage": "adverse_action_consultation",
+            "next_agent": "master",
+            "should_end": False
+        }
+        self._record_conversation(state, user_message, bot_text)
+        return updates
+
+    def _rejection_objection_fallback(self, name: str, credit_score: int) -> str:
+        return (
+            f"I completely understand, {name}, and I'm here to help you explore alternative solutions! "
+            f"While our automated underwriting policy requires a minimum credit score of 700 for an unsecured personal loan, "
+            f"here are 3 concrete paths we can take right now:\n\n"
+            f"1. **Add a Co-Borrower / Co-Applicant**: You can apply jointly with an immediate family member (spouse, parent, or earning sibling) "
+            f"who has a credit score of 720+. Their score will qualify the application for immediate approval.\n\n"
+            f"2. **Secured Loan Options**: We offer **Loan Against Property (LAP)** and loans backed by fixed deposits/securities with flexible credit score requirements and lower interest rates (starting at 9.25% p.a.).\n\n"
+            f"3. **Credit Improvement (90 Days)**: Paying down existing revolving balances to bring utilization under 30% typically boosts your bureau score above 700 within 60 to 90 days.\n\n"
+            f"Would you like to explore adding a co-applicant, or would you prefer details on our secured loan options?"
         )
 
     def _record_conversation(self, state: LoanApplicationState, user_msg: str, bot_msg: str):

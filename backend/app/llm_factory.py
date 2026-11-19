@@ -28,13 +28,15 @@ def get_conversational_llm() -> Any:
     if gemini_key:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
             logger.info(f"[LLMFactory] Using Google Gemini ({model_name}) for Conversational LLM")
             return ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=gemini_key,
                 temperature=0.7,
                 max_output_tokens=1024,
+                timeout=10.0,
+                max_retries=1,
             )
         except Exception as e:
             logger.warning(f"[LLMFactory] Failed to initialize Gemini, checking Groq: {e}")
@@ -48,6 +50,8 @@ def get_conversational_llm() -> Any:
         model=model_name,
         temperature=0.7,
         max_tokens=1024,
+        request_timeout=10.0,
+        max_retries=1,
     )
 
 
@@ -59,12 +63,14 @@ def get_analytical_llm() -> Any:
     if gemini_key:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            model_name = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")
+            model_name = getattr(settings, "GEMINI_MODEL", "gemini-2.5-flash")
             return ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=gemini_key,
                 temperature=0.2,
                 max_output_tokens=1024,
+                timeout=10.0,
+                max_retries=1,
             )
         except Exception as e:
             logger.warning(f"[LLMFactory] Failed to initialize Gemini for analytical: {e}")
@@ -76,6 +82,8 @@ def get_analytical_llm() -> Any:
         model=model_name,
         temperature=0.2,
         max_tokens=1024,
+        request_timeout=10.0,
+        max_retries=1,
     )
 
 
@@ -87,13 +95,15 @@ def get_vision_llm() -> Any:
     if gemini_key:
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            model_name = getattr(settings, "GEMINI_VISION_MODEL", "gemini-1.5-flash")
+            model_name = getattr(settings, "GEMINI_VISION_MODEL", "gemini-2.5-flash")
             logger.info(f"[LLMFactory] Using Google Gemini Multimodal Vision ({model_name})")
             return ChatGoogleGenerativeAI(
                 model=model_name,
                 google_api_key=gemini_key,
                 temperature=0.1,
                 max_output_tokens=1024,
+                timeout=15.0,
+                max_retries=1,
             )
         except Exception as e:
             logger.warning(f"[LLMFactory] Failed to initialize Gemini Vision: {e}")
@@ -105,4 +115,6 @@ def get_vision_llm() -> Any:
         model=model_name,
         temperature=0.1,
         max_tokens=1024,
+        request_timeout=15.0,
+        max_retries=1,
     )

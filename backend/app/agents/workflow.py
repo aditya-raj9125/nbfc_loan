@@ -60,6 +60,12 @@ class LoanWorkflow:
 
         logger.info(f"[Workflow] Stage: {current_stage}, Next Agent: {next_agent}")
 
+        # 0. Post-Rejection / Adverse Action Objection Handling
+        if state.get("application_status") == "rejected":
+            master_updates = await master_agent_llm.run(state)
+            state.update(master_updates)
+            return state
+
         # 1. Master Agent turn
         if next_agent == "master" or (
             current_stage in ["greeting", "onboarding", "discovery"]
@@ -129,15 +135,11 @@ class LoanWorkflow:
             sanct_updates = await sanction_agent.run(state)
             state.update(sanct_updates)
 
-        # 7. Completed stage
+        # 7. Completed stage (Post-Sanction follow-up questions)
         elif next_agent == "completed":
-            state["should_end"] = True
-            name = state.get("customer_name") or "there"
-            first_name = name.split()[0].title()
-            state["bot_response"] = (
-                f"Thank you, {first_name}! Your loan application is fully processed. "
-                f"Our disbursement team is completing the fund transfer. Have a wonderful day!"
-            )
+            master_updates = await master_agent_llm.run(state)
+            state.update(master_updates)
+            return state
 
         return state
 

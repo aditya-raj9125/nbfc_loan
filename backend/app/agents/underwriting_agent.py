@@ -57,8 +57,8 @@ class UnderwritingAgent:
             updates["rejection_reason"] = (
                 f"Credit score of {credit_score} is below our threshold of 700."
             )
-            updates["next_agent"] = "completed"
-            updates["should_end"] = True
+            updates["next_agent"] = "master"
+            updates["should_end"] = False
 
             bot_text = (
                 f"Thank you for your patience, {customer_name}. We have retrieved your credit report from the bureau. "
