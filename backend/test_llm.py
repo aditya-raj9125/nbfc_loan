@@ -1,32 +1,33 @@
 """
-Quick test to verify OpenAI LLM is working
+Quick diagnostic test to verify Groq LLM connectivity
 """
 import asyncio
-from app.llm_factory import conversational_llm
+from app.llm_factory import get_conversational_llm
 from langchain_core.messages import SystemMessage, HumanMessage
 
 
 async def test_llm():
-    """Test if LLM is responding"""
-    print("Testing OpenAI LLM connection...")
+    """Test if Groq LLM responds"""
+    print("Testing Groq LLM connection (Llama 3.1)...")
     print("-" * 50)
-    
+
+    llm = get_conversational_llm()
     messages = [
-        SystemMessage(content="You are Shruti, a helpful loan assistant. Keep responses brief."),
-        HumanMessage(content="Hi, I need a personal loan")
+        SystemMessage(content="You are Shruti, an NBFC loan assistant. Respond in 1 brief sentence."),
+        HumanMessage(content="Hello Shruti, I want to explore a personal loan.")
     ]
-    
+
     try:
-        response = await conversational_llm.ainvoke(messages)
+        response = await llm.ainvoke(messages)
         print("✅ LLM Response:")
         print(response.content)
         print("-" * 50)
-        print("✅ OpenAI is working correctly!")
+        print("✅ Groq LLM is online and operational!")
         return True
     except Exception as e:
         print(f"❌ Error: {e}")
         print("-" * 50)
-        print("❌ OpenAI connection failed!")
+        print("❌ Groq LLM connection failed. Check GROQ_API_KEY in backend/.env.")
         return False
 
 

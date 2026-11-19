@@ -119,12 +119,18 @@ export default function Home() {
                   <a href="#" className="text-gray-600 hover:text-gray-900 transition-colors text-sm">Contact us</a>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button className="text-gray-600 hover:text-gray-900 transition-colors text-sm font-medium">
-                    Log in
-                  </button>
-                  <button className="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors">
-                    Get started
-                  </button>
+                  <a
+                    href="/login"
+                    className="text-gray-700 hover:text-blue-600 transition-colors text-sm font-semibold px-3 py-1.5"
+                  >
+                    Select Test Persona
+                  </a>
+                  <a
+                    href="/login"
+                    className="bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 shadow-sm transition-all"
+                  >
+                    Launch Demo Portal
+                  </a>
                 </div>
               </div>
             </nav>

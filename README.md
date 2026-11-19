@@ -1,252 +1,261 @@
-# 🚀 NBFC Loan Chatbot - AI-Powered Loan Application System
+# 🏦 NBFC Agentic Conversational Loan Platform
+### *AI-Powered Digital Lending Assistant — Built for EY Techathon 6.0*
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green)](https://fastapi.tiangolo.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.2-blue)](https://langchain.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14-blue)](https://www.postgresql.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-> An intelligent conversational AI system that simulates a human loan officer, built with multi-agent architecture for EY Techathon 6.0.
-
-![Demo](image.png)
+[![Next.js 14](https://img.shields.io/badge/Frontend-Next.js%2014-black?logo=next.js)](https://nextjs.org/)
+[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Groq Llama 3.3](https://img.shields.io/badge/Conversational%20LLM-Groq%20Llama%203.3%2070B-orange)](https://groq.com/)
+[![Groq Vision](https://img.shields.io/badge/Multimodal%20Vision-Llama%203.2%2011B%20Vision-blueviolet)](https://groq.com/)
+[![SQLite](https://img.shields.io/badge/Database-SQLite%20(Zero--Config)-003B57?logo=sqlite)](https://sqlite.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
 
-## ✨ Features
+## 🌟 Executive Summary
 
-- 🤖 **Multi-Agent AI System** - Master agent orchestrating 4 specialized worker agents
-- 💬 **Human-like Conversation** - Natural, empathetic dialogue using OpenAI GPT-3.5
-- 🔐 **Google OAuth Login** - Secure authentication with separate sessions per user
-- 💾 **Chat History** - PostgreSQL database storing all conversations
-- ⚡ **Real-time Chat** - WebSocket-based bidirectional communication
-- 📄 **PDF Generation** - Automatic sanction letter creation
-- 🎯 **Edge Case Handling** - Rejections, document requests, alternatives
-- 🌐 **Modern UI** - Beautiful, responsive design with Framer Motion animations
+The **NBFC Agentic Conversational Loan Platform** is a state-of-the-art digital sales assistant engineered to maximize personal loan conversion for Non-Banking Financial Companies. Built on an advanced **Master-Worker Agentic Architecture**, the platform replaces rigid rule-based chatbots with an empathetic, human-like sales conversationalist named **Shruti**. 
 
----
+Shruti coordinates specialized Worker AI Agents to handle consultative requirement discovery, transparent EMI pricing, real-time CRM KYC verification, zero-OCR multimodal document extraction, credit underwriting rule enforcement, and instant PDF sanction letter issuance.
 
-## 🎭 Agent System
+```mermaid
+flowchart TD
+    subgraph ClientLayer["Frontend Experience (Next.js 14)"]
+        UI["Interactive Chat Interface\n(Tailwind CSS + Framer Motion)"]
+        Auth["1-Click Demo Persona Auth\n& Guest Mode (NextAuth.js)"]
+        WSClient["WebSocket Client\n(Real-Time Bidirectional Sync)"]
+        DocUploader["Drag-and-Drop Document Uploader\n(Salary Slip / PAN / Aadhaar)"]
+    end
 
-| Agent | Role | LLM Config |
-|-------|------|------------|
-| **Master** | Orchestrator, intent analysis | GPT-3.5 (temp: 0.7) |
-| **Sales** | Loan discussion, EMI calculation | GPT-3.5 (temp: 0.7) |
-| **Verification** | KYC verification via CRM | GPT-3.5 (temp: 0.3) |
-| **Underwriting** | Credit scoring, approval decisions | GPT-3.5 (temp: 0.3) |
-| **Sanction** | PDF generation, next steps | GPT-3.5 (temp: 0.3) |
+    subgraph BackendLayer["Agentic Core (FastAPI & LangChain)"]
+        MasterAgent["Master Agent (Shruti)\nConversational Orchestration & State Manager"]
+        
+        subgraph WorkerPool["Specialized Worker Agents"]
+            SalesAgent["Sales Agent\nReducing-Balance EMI Engine"]
+            KYCAgent["Verification Agent\nCore Banking CRM KYC"]
+            DocAgent["Document Agent\nGroq Llama 3.2 11B Vision"]
+            UWAgent["Underwriting Agent\nCIBIL & 4-Rule Decision Engine"]
+            SanctionAgent["Sanction Agent\nReportLab PDF Generation"]
+        end
+    end
 
----
+    subgraph DataLayer["Persistence & External Services"]
+        LocalDB[("Local SQLite Database\n(nbfc_loan.db)")]
+        GroqAPI["Groq Cloud API\n(Llama 3.3 70B & 3.2 Vision)"]
+        CRMMock["Mock CRM & Offer Mart"]
+        BureauMock["Mock Credit Bureau Engine"]
+    end
 
-## 🛠️ Tech Stack
+    UI --> WSClient
+    UI --> DocUploader
+    WSClient <-->|WebSocket Stream| MasterAgent
+    DocUploader -->|REST Upload| DocAgent
 
-**Frontend:** Next.js 14, TypeScript, Tailwind CSS, Framer Motion, NextAuth.js  
-**Backend:** FastAPI, LangGraph, LangChain, OpenAI GPT-3.5  
-**Database:** PostgreSQL, SQLAlchemy ORM  
-**Real-time:** WebSockets  
-**PDF:** ReportLab  
+    MasterAgent <--> SalesAgent
+    MasterAgent <--> KYCAgent
+    MasterAgent <--> DocAgent
+    MasterAgent <--> UWAgent
+    MasterAgent <--> SanctionAgent
 
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-
-- Node.js 18+
-- Python 3.10+
-- PostgreSQL 14+
-- OpenAI API key
-
-### Installation
-
-**1. Clone the repository**
-```bash
-git clone https://github.com/yourusername/nbfc-loan-chatbot.git
-cd nbfc-loan-chatbot
+    DocAgent --> GroqAPI
+    MasterAgent --> GroqAPI
+    KYCAgent --> CRMMock
+    UWAgent --> BureauMock
+    MasterAgent --> LocalDB
 ```
 
-**2. Frontend Setup**
-```bash
-# Install dependencies
-npm install
+---
 
-# Create .env.local
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-secret
-NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=$(openssl rand -base64 32)
-NEXT_PUBLIC_API_URL=http://localhost:8000
+## 🚀 Key Innovations & Differentiators
 
-# Run frontend
-npm run dev
+| Capability | Legacy Approach | Our Agentic Solution |
+| :--- | :--- | :--- |
+| **Agent Architecture** | Static decision trees or single monolithic LLM prompt | **Master-Worker Agentic Graph**: Master orchestrates specialized Worker Agents for sales, verification, underwriting, and PDF generation. |
+| **Document Processing** | Fragile Tesseract OCR, Poppler binary dependencies, and rigid regexes | **Multimodal Vision AI**: Groq Llama 3.2 11B Vision directly parses PDFs and images to extract salary, PAN, and Aadhaar numbers. |
+| **Database Dependency** | External PostgreSQL / Redis setup requiring manual installation | **Zero-Config Local SQLite**: Instant spin-up on any environment (`sqlite:///./nbfc_loan.db`). |
+| **Authentication** | External Google OAuth credentials blocking local demo testing | **1-Click Test Persona Selector**: Pre-seeded demo accounts (Rahul, Priya, Vikram, Anjali, etc.) plus Instant Guest Mode. |
+| **Underwriting Policy** | Opaque black-box outputs | **Deterministic 4-Rule Decision Matrix**: Instant approval for $\le$ pre-approved, salary check for $\le 2\times$, and transparent rejection handling. |
+| **Sanction Issuance** | Static dummy mock text | **Dynamic PDF Generation**: Generates official sanction letters with terms, EMIs, and NBFC digital stamps. |
+
+---
+
+## 🎭 Agent Hierarchy & Responsibilities
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer as Borrower
+    participant Master as Master Agent (Shruti)
+    participant Sales as Sales Agent
+    participant KYC as Verification Agent
+    participant Vision as Multimodal Doc Agent
+    participant UW as Underwriting Agent
+    participant Sanction as Sanction Agent
+
+    Customer->>Master: "Hi, I need a loan of Rs. 3,50,000 for home renovation"
+    Master->>Sales: Compute reducing-balance EMI options
+    Sales-->>Master: 24m (Rs. 16,248) | 36m (Rs. 11,380)
+    Master->>Customer: Presents personalized EMI plan with clear repayment terms
+    
+    Customer->>Master: "Let's go with the 36-month option"
+    Master->>KYC: Verify KYC status from CRM
+    KYC-->>Master: KYC Verified (Address & Phone confirmed)
+    
+    Master->>UW: Evaluate Credit Bureau Eligibility
+    UW-->>Master: Credit Score 782 >= 700. Amount requires salary verification.
+    Master->>Customer: "Please upload your latest salary slip to proceed."
+    
+    Customer->>Vision: Uploads salary_slip.pdf
+    Vision-->>Master: Extracted: Monthly take-home Rs. 85,000 (EMI is 13.4% of salary <= 50%)
+    
+    Master->>UW: Final Approval Evaluation
+    UW-->>Master: APPROVED (Rule 3 Satisfied)
+    Master->>Sanction: Compile official Sanction Letter PDF
+    Sanction-->>Master: PDF Generated (sanction_cust_001.pdf)
+    Master->>Customer: Official Sanction Letter link + congratulations message
 ```
 
-**3. Backend Setup**
-```bash
+---
+
+## 📋 Comprehensive Documentation Index
+
+Explore our in-depth technical specifications and architectural documentation:
+
+- 📄 [docs/PROBLEM_STATEMENT.md](file:///e:/Projects/nbfc-loan-chatbot/docs/PROBLEM_STATEMENT.md) — Official EY Techathon 6.0 context, business goals, and evaluation criteria.
+- 📐 [docs/ARCHITECTURE.md](file:///e:/Projects/nbfc-loan-chatbot/docs/ARCHITECTURE.md) — Deep-dive system architecture, agent state machine, data models, and sequence diagrams.
+- 🔌 [docs/API_SPECIFICATION.md](file:///e:/Projects/nbfc-loan-chatbot/docs/API_SPECIFICATION.md) — Complete REST endpoint schemas, WebSocket protocols, and JSON payloads.
+- ⚖️ [docs/SYSTEM_ASSUMPTIONS_AND_RULES.md](file:///e:/Projects/nbfc-loan-chatbot/docs/SYSTEM_ASSUMPTIONS_AND_RULES.md) — Underwriting policy matrix, financial math formulas, and 10 synthetic customer profiles.
+
+---
+
+## 👥 Demo Personas & Test Scenarios
+
+Navigate to `http://localhost:3000/login` to select any of the pre-configured demo personas:
+
+| Persona | Role / Profile | Testing Objective | Expected Outcome |
+| :--- | :--- | :--- | :--- |
+| **Rahul Sharma** | Tech Lead, Mumbai<br>Pre-approved: **Rs. 5,00,000**<br>Score: **782** | **Happy Path Fast-Track**: Request Rs. 3,50,000 (within pre-approved limit). | ⚡ **Instant Sanction** without requiring documents. Official PDF generated. |
+| **Priya Patel** | Product Manager, Bangalore<br>Pre-approved: **Rs. 7,50,000**<br>Score: **820** | **High-Value Prime Borrower**: Request Rs. 6,00,000. | 🏆 **Instant Sanction** at prime interest rate (10.0% p.a.). |
+| **Amit Kumar** | Operations Manager, Delhi<br>Pre-approved: **Rs. 3,00,000**<br>Score: **715** | **Income Enhancement**: Request Rs. 4,50,000 ($> 1\times$ pre-approved). | 📄 Prompts for **Salary Slip**. Validates EMI $\le 50\%$ income and approves. |
+| **Vikram Singh** | Consultant, Pune<br>Credit Score: **680** ($< 700$) | **Adverse Action Edge Case**: Low credit score test. | ❌ **Transparent Rejection** explaining the 700 threshold with advisory guidance. |
+| **Anjali Verma** | Marketing Specialist, Chennai<br>KYC: **Pending** | **KYC Onboarding**: Missing KYC address and phone. | 🔍 **Verification Agent** walks applicant through KYC confirmation. |
+| **Guest User** | Unauthenticated walk-in | **Walk-in Discovery Flow**: New-to-bank applicant. | 👤 Collects PAN/Aadhaar via Vision AI and dynamically creates customer profile. |
+
+---
+
+## 🛠️ Step-by-Step Run Guide
+
+### 1. Prerequisites
+- **Node.js**: v18.0.0 or later
+- **Python**: v3.10, v3.11, or v3.12
+- **Groq API Key**: Free API key from [Groq Console](https://console.groq.com)
+
+---
+
+### 2. Backend Setup
+
+```powershell
+# Navigate to the backend directory
 cd backend
 
-# Create virtual environment
+# Create and activate a Python virtual environment
 python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
 
-# Install dependencies
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+# (Or Linux/macOS: source venv/bin/activate)
+
+# Install backend dependencies
 pip install -r requirements.txt
 
-# Create PostgreSQL database
-psql -U postgres -c "CREATE DATABASE nbfc_loan_db;"
+# Configure your backend .env file (ensure GROQ_API_KEY is set)
+# backend/.env:
+# DATABASE_URL=sqlite:///./nbfc_loan.db
+# GROQ_API_KEY=gsk_your_groq_api_key_here
 
-# Create .env
-DATABASE_URL=postgresql://postgres:password@localhost:5432/nbfc_loan_db
-OPENAI_API_KEY=sk-your-openai-api-key
-OPENAI_MODEL=gpt-3.5-turbo
-USE_LOCAL_LLM=false
-FRONTEND_URL=http://localhost:3000
-SECRET_KEY=$(openssl rand -hex 32)
-
-# Initialize database
-python -c "from app.database import Base, engine; Base.metadata.create_all(bind=engine)"
-
-# Create upload directories
-mkdir uploads\sanction_letters uploads\documents
-
-# Run backend
-uvicorn app.main:app --reload
+# Start the FastAPI server with auto-reload
+uvicorn app.main:app --reload --port 8000
 ```
-
-**4. Access the Application**
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/docs
+> The backend server will start at `http://localhost:8000`. Fast-track health check: `http://localhost:8000/`.
 
 ---
 
-## 📖 Documentation
+### 3. Frontend Setup
 
-For complete documentation, see **[PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)**
+In a new terminal window:
 
-Topics covered:
-- System Architecture
-- Agent System Details
-- Database Schema
-- API Documentation
-- Testing & Demo Scenarios
-- Deployment Guide
+```powershell
+# In project root:
+cd ..  # If inside backend/
+
+# Install Node modules
+npm install
+
+# Start Next.js development server
+npm run dev
+```
+> The frontend application will be live at `http://localhost:3000`.
 
 ---
 
-## 🎬 Demo Scenarios
+## 🧪 Testing the Conversational Workflow
 
-### Instant Approval ✅
-```
-User: I need a loan of 3 lakhs
-Bot: [Verifies KYC → Checks credit (782) → Approves → Generates PDF]
-```
-
-### Document Required 📄
-```
-User: I need 7 lakhs
-Bot: [Above pre-approved limit → Requests salary slip]
-```
-
-### Rejection with Alternative ❌
-```
-User: I need 15 lakhs
-Bot: [Credit score too low → Offers ₹4L alternative]
-```
+1. Open your browser and visit [http://localhost:3000](http://localhost:3000).
+2. Click **"Explore Demo Personas"** or navigate directly to [http://localhost:3000/login](http://localhost:3000/login).
+3. Click on **"Rahul Sharma"** to automatically populate credentials and sign in.
+4. The chat interface opens with a personalized welcome from **Shruti**:
+   > *"Hello Rahul! Welcome back to NBFC Finance. As a valued customer, you have a pre-approved personal loan of up to **Rs. 5,00,000** ready for immediate disbursal. How can I help you today?"*
+5. Try asking:
+   - *"I want Rs. 3,50,000 for home renovation. What are the EMI options for 24 and 36 months?"*
+   - *"Let's go with 36 months. Please proceed."*
+6. Watch the **Underwriting Agent** approve the application and the **Sanction Agent** generate a downloadable PDF sanction letter with digital seal and terms.
 
 ---
 
-## 🏗️ Project Structure
+## 📂 Project Structure
 
-```
+```text
 nbfc-loan-chatbot/
-├── app/                    # Next.js frontend
-├── components/             # React components
-├── backend/
+├── app/                              # Next.js 14 App Router
+│   ├── api/auth/[...nextauth]/       # NextAuth Credentials Auth Handler
+│   ├── login/                        # Dedicated Persona Login Page
+│   ├── page.tsx                      # Modern Landing Page & Portal
+│   └── layout.tsx                    # Root Layout & SessionProvider
+├── components/                       # React UI Components
+│   ├── ChatWidget.tsx                # WebSocket Chat Interface & Fast Replies
+│   └── DocumentUpload.tsx            # Drag-and-drop Document Ingestion
+├── backend/                          # FastAPI Backend Application
 │   ├── app/
-│   │   ├── agents/        # LangGraph agents
-│   │   ├── services/      # Mock services
-│   │   └── main.py        # FastAPI app
-│   └── uploads/           # Generated PDFs
-├── PROJECT_DOCUMENTATION.md
-└── README.md
+│   │   ├── agents/                   # Agentic AI Architecture
+│   │   │   ├── master_agent_llm.py   # Shruti Master Coordinator (Llama 3.3 70B)
+│   │   │   ├── sales_agent.py        # Sales Advisor & EMI Math
+│   │   │   ├── verification_agent.py # CRM KYC Verification Agent
+│   │   │   ├── document_agent.py     # Multimodal Vision AI Document Agent
+│   │   │   ├── underwriting_agent.py # Credit Bureau & 4-Rule Decision Engine
+│   │   │   ├── sanction_agent.py     # Sanction PDF Generation Agent
+│   │   │   ├── state.py              # LangGraph Application State
+│   │   │   └── workflow.py           # Multi-Agent Orchestration Graph
+│   │   ├── services/                 # Enterprise Mock & Vision Services
+│   │   │   ├── ocr_service.py        # Groq Llama 3.2 11B Vision Extractor
+│   │   │   ├── credit_bureau.py      # CIBIL / Experian Bureau Simulation
+│   │   │   └── pdf_generator.py      # ReportLab PDF Document Engine
+│   │   ├── config.py                 # Pydantic Settings & Config
+│   │   ├── database.py               # Local SQLite Engine & Session
+│   │   ├── main.py                   # FastAPI REST & WebSocket Endpoints
+│   │   ├── mock_data.py              # 10 Synthetic Customer Personas & Offer Mart
+│   │   └── models.py                 # SQLAlchemy Relational Models
+│   ├── requirements.txt              # Backend Dependencies
+│   └── test_llm.py                   # Groq LLM & Vision Diagnostic Test
+├── docs/                             # Enterprise Technical Documentation
+│   ├── PROBLEM_STATEMENT.md          # EY Techathon 6.0 Objectives
+│   ├── ARCHITECTURE.md               # Technical Architecture & Topology
+│   ├── API_SPECIFICATION.md          # REST & WebSocket Interface Contract
+│   └── SYSTEM_ASSUMPTIONS_AND_RULES.md # Underwriting Policies & Math Models
+├── public/                           # Static Assets & Icons
+├── README.md                         # Master Documentation
+└── package.json                      # Frontend Dependencies
 ```
 
 ---
 
-## 💰 Cost Estimation
+## ⚖️ License & Acknowledgments
 
-**OpenAI GPT-3.5 Turbo:**
-- 100 conversations: ~$0.04
-- Free trial: $5 credits (10,000+ messages)
-- Perfect for demos and testing!
-
----
-
-## 🔒 Security
-
-- ✅ Google OAuth authentication
-- ✅ Per-user session isolation
-- ✅ Environment variable protection
-- ✅ CORS protection
-- ✅ Input validation (Pydantic)
-
----
-
-## 🎯 Key Highlights
-
-1. **Human-like Conversation** - Natural dialogue with empathy
-2. **Production-Ready** - Scalable multi-agent architecture
-3. **Complete Implementation** - All features functional
-4. **Edge Case Handling** - Rejections, alternatives, documents
-5. **Comprehensive Documentation** - Setup to deployment
-
----
-
-## 📊 Performance
-
-- Response Time: < 2 seconds
-- Concurrent Users: 100+ (single instance)
-- Database: Optimized with indexes
-- WebSocket Latency: < 100ms
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
----
-
-## 👥 Team
-
-Built with ❤️ for **EY Techathon 6.0**
-
----
-
-## 🙏 Acknowledgments
-
-- OpenAI for GPT-3.5 API
-- LangChain team for LangGraph
-- FastAPI for the amazing framework
-- Next.js team for the frontend framework
-
----
-
-## 📞 Support
-
-For issues or questions:
-- 📧 Email: support@example.com
-- 🐛 Issues: [GitHub Issues](https://github.com/yourusername/nbfc-loan-chatbot/issues)
-- 📖 Docs: [PROJECT_DOCUMENTATION.md](PROJECT_DOCUMENTATION.md)
-
----
-
-**⭐ Star this repo if you find it helpful!**
+Developed for the **EY Techathon 6.0**. Built with modern agentic AI standards adhering to enterprise banking and NBFC compliance guidelines. Released under the [MIT License](LICENSE).

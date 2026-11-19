@@ -523,36 +523,40 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
                 <ChevronDown className="w-4 h-4 text-gray-400" />
               </div>
               
-              <span className="text-sm font-medium text-gray-700">Daily FinanceAI</span>
+              <span className="text-sm font-semibold text-gray-800">NBFC Digital Sales Assistant</span>
               
               {status === 'authenticated' && session?.user ? (
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    {session.user.image && (
-                      <img 
-                        src={session.user.image} 
-                        alt={session.user.name || 'User'} 
-                        className="w-8 h-8 rounded-full border-2 border-gray-200"
-                      />
-                    )}
-                    <span className="text-sm font-medium text-gray-700">{session.user.name}</span>
+                  <div className="flex items-center gap-2 bg-white/80 px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
+                    <div className="w-7 h-7 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
+                      {session.user.name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs font-semibold text-gray-800 block leading-tight">{session.user.name}</span>
+                      <span className="text-[10px] text-gray-500 block leading-tight">{session.user.email}</span>
+                    </div>
                   </div>
                   <button 
-                    onClick={() => signOut()}
-                    className="px-4 py-2 bg-red-600 text-white text-sm rounded-full flex items-center gap-2 hover:bg-red-700 transition-colors"
+                    onClick={() => signOut({ callbackUrl: '/login' })}
+                    className="px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium rounded-full flex items-center gap-1.5 transition-colors border border-gray-200"
                   >
-                    <LogOut className="w-4 h-4" />
-                    Logout
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sign Out
                   </button>
                 </div>
               ) : (
-                <button 
-                  onClick={() => signIn('google')}
-                  className="px-4 py-2 bg-gray-900 text-white text-sm rounded-full flex items-center gap-2 hover:bg-gray-800 transition-colors"
-                >
-                  <LogIn className="w-4 h-4" />
-                  Login with Google
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full font-medium">
+                    Guest Mode
+                  </span>
+                  <a 
+                    href="/login"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-full flex items-center gap-1.5 transition-all shadow-sm hover:shadow"
+                  >
+                    <LogIn className="w-3.5 h-3.5" />
+                    Switch Persona / Sign In
+                  </a>
+                </div>
               )}
             </motion.header>
 
