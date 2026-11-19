@@ -171,8 +171,9 @@ pip install -r requirements.txt
 # DATABASE_URL=sqlite:///./nbfc_loan.db
 # GROQ_API_KEY=gsk_your_groq_api_key_here
 
-# Start the FastAPI server with auto-reload
-uvicorn app.main:app --reload --port 8000
+# Start the FastAPI server (with 1MB header buffer to prevent HTTP 431)
+python run.py
+# (Or: uvicorn app.main:app --reload --port 8000 --http h11 --h11-max-incomplete-event-size 1048576)
 ```
 > The backend server will start at `http://localhost:8000`. Fast-track health check: `http://localhost:8000/`.
 
