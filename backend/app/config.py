@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     
     # Google Gemini Configuration (Primary Provider)
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
-    GEMINI_VISION_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_VISION_MODEL: str = "gemini-2.5-flash"
 
     # Groq LLM Configuration (Alternative Provider)
     GROQ_API_KEY: str = ""
