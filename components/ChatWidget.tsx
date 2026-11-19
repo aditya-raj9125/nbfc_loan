@@ -218,7 +218,11 @@ export default function ChatWidget({ isExpanded, onExpand, onCollapse, initialMe
 
     // If WebSocket is connected, send the message to backend and let agents respond
     if (websocketRef.current && websocketRef.current.readyState === WebSocket.OPEN) {
-      websocketRef.current.send(JSON.stringify({ content: userMessage }));
+      websocketRef.current.send(JSON.stringify({
+        type: 'user_message',
+        content: userMessage,
+        message: userMessage
+      }));
       return;
     }
 

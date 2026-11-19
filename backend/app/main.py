@@ -3,6 +3,21 @@ FastAPI Main Application
 WebSocket-based real-time chat with LangGraph agents
 Document upload support for Aadhaar, PAN, Salary Slips
 """
+# --------------------------------------------------------------------------
+# Prevent HTTP 400 Bad Request / 431 on large Cookie headers from localhost
+# --------------------------------------------------------------------------
+try:
+    import websockets.legacy.http
+    websockets.legacy.http.MAX_LINE_LENGTH = 1048576  # 1MB max header line
+except Exception:
+    pass
+
+try:
+    import websockets.http11
+    websockets.http11.MAX_LINE_LENGTH = 1048576       # 1MB max header line
+except Exception:
+    pass
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -563,7 +578,7 @@ Are you looking for a loan, or would you like to check your eligibility first?""
             data = await websocket.receive_text()
             message_data = json.loads(data)
             
-            user_message = message_data.get("content", "")
+            user_message = message_data.get("content") or message_data.get("message") or ""
             
             if not user_message.strip():
                 continue

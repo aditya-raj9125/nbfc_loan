@@ -209,7 +209,13 @@ GUIDELINES (EY Top-Tier Executive Standards):
                 updates["onboarding_step"] = "name"
                 updates["needs_onboarding"] = True
             else:
-                name = clean_msg.title()
+                extracted_name = re.sub(
+                    r"^(?:my\s+name\s+is|i\s+am|i'm|this\s+is|call\s+me)\s+",
+                    "",
+                    clean_msg,
+                    flags=re.IGNORECASE
+                ).strip()
+                name = extracted_name.title() if extracted_name else clean_msg.title()
                 updates["customer_name"] = name
                 first_name = name.split()[0]
                 bot_resp = f"Pleasure to meet you, {first_name}! Could you share your 10-digit mobile number so I can check your pre-approved offers?"
