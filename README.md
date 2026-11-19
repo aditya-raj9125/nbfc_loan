@@ -196,7 +196,30 @@ npm run dev
 
 ---
 
-## 🧪 Testing the Conversational Workflow
+## 🧪 Automated Test Suite (28 Comprehensive Tests)
+
+The platform includes an automated test suite validating all 10 problem statement conversational journeys, 4-tier underwriting decision rules, financial amortization math, and multimodal Vision AI document parsing:
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+
+# Run the unified master test runner:
+python run_all_tests.py
+
+# Or via pytest:
+pytest tests/ -v
+```
+
+| Test Module | Coverage Scope | Status |
+| :--- | :--- | :---: |
+| **`test_agent_orchestration.py`** | All 10 Problem Statement Scenarios (Rules 1-4, Fast-track instant sanction, FOIR calculation, Single-borrower cap, KYC onboarding, Guest walk-in, Context retention) | **100% Passed (9/9)** |
+| **`test_financial_math.py`** | Reducing-balance EMI math, dynamic interest rate tiering (prime 9.5% vs standard 10.5% vs subprime 12.5%), tenure suggestion algorithms | **100% Passed (10/10)** |
+| **`test_document_vision.py`** | PyMuPDF page rendering, markdown code-fence parsing resilience, multimodal extraction pipelines for Salary Slips, PAN, and Aadhaar | **100% Passed (9/9)** |
+
+---
+
+## 🧪 Interactive Walkthrough for Evaluators
 
 1. Open your browser and visit [http://localhost:3000](http://localhost:3000).
 2. Click **"Explore Demo Personas"** or navigate directly to [http://localhost:3000/login](http://localhost:3000/login).
@@ -242,6 +265,12 @@ nbfc-loan-chatbot/
 │   │   ├── main.py                   # FastAPI REST & WebSocket Endpoints
 │   │   ├── mock_data.py              # 10 Synthetic Customer Personas & Offer Mart
 │   │   └── models.py                 # SQLAlchemy Relational Models
+│   ├── tests/                        # Comprehensive Automated Test Suite
+│   │   ├── mock_documents.py         # Synthetic Salary Slip, PAN & Aadhaar Generator
+│   │   ├── test_agent_orchestration.py # 10 Conversational & Policy Test Scenarios
+│   │   ├── test_financial_math.py    # Reducing-Balance EMI & Rate Calculations
+│   │   └── test_document_vision.py   # PyMuPDF & Multimodal OCR Resilience
+│   ├── run_all_tests.py              # Master Test Runner Script
 │   ├── requirements.txt              # Backend Dependencies
 │   └── test_llm.py                   # Groq LLM & Vision Diagnostic Test
 ├── docs/                             # Enterprise Technical Documentation

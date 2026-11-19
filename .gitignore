@@ -29,6 +29,7 @@ pip-delete-this-directory.txt
 
 # ------ Uploaded / generated files ------
 backend/uploads/
+backend/tests/mock_files/
 diagrams/
 
 # ------ Environment & secrets ------

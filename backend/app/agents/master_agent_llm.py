@@ -207,12 +207,14 @@ GUIDELINES (EY Top-Tier Executive Standards):
             if clean_msg.lower() in ["hi", "hello", "hey", "namaste", "good morning", "yo"]:
                 bot_resp = "Hello! Welcome to NBFC Finance. I'm Shruti, your loan advisor. What should I call you?"
                 updates["onboarding_step"] = "name"
+                updates["needs_onboarding"] = True
             else:
                 name = clean_msg.title()
                 updates["customer_name"] = name
                 first_name = name.split()[0]
                 bot_resp = f"Pleasure to meet you, {first_name}! Could you share your 10-digit mobile number so I can check your pre-approved offers?"
                 updates["onboarding_step"] = "phone"
+                updates["needs_onboarding"] = True
 
         elif step == "phone":
             phone_clean = re.sub(r"[^\d]", "", clean_msg)
@@ -221,9 +223,11 @@ GUIDELINES (EY Top-Tier Executive Standards):
                 updates["customer_phone"] = f"+91-{phone}"
                 bot_resp = f"Got it! And what is your age?"
                 updates["onboarding_step"] = "age"
+                updates["needs_onboarding"] = True
             else:
                 bot_resp = "Please enter a valid 10-digit Indian mobile number (e.g. 9876543210)."
                 updates["onboarding_step"] = "phone"
+                updates["needs_onboarding"] = True
 
         elif step == "age":
             age_match = re.search(r"\b(\d{2})\b", clean_msg)
@@ -238,6 +242,7 @@ GUIDELINES (EY Top-Tier Executive Standards):
             else:
                 bot_resp = "Please share your age (must be between 18 and 75 for eligibility)."
                 updates["onboarding_step"] = "age"
+                updates["needs_onboarding"] = True
 
         else:
             updates["needs_onboarding"] = False
